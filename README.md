@@ -11,6 +11,9 @@ The goal of this system is to abstract RTOS.
 #### Singleton
 ```c++
 // Header file
+#include <RtosMsgBufferTask.hpp>
+#include <SingletonTask.hpp>
+#include <QMsg.hpp>
 
 // List of commands the task can receive
 enum class MyCmd
