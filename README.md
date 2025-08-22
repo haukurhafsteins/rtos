@@ -6,6 +6,10 @@ The goal of this system is to abstract RTOS.
 - FreeRTOS
 - Zephyr
 
+In your makefile define one of the following for the OS to use:
+* `USE_FREERTOS`:
+* `USE_ZEPHYR`:
+
 ## Tasks
 ### The Task Class
 #### Singleton
