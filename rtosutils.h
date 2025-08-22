@@ -14,6 +14,7 @@
         }                                \
     }
 
+#define get_time_in_milliseconds() (esp_timer_get_time() * 1e-3)
 #define get_time_in_seconds() (esp_timer_get_time() * 1e-6)
 
 #define RUN_CODE_EVERY_START(period) \
