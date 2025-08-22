@@ -1,0 +1,9 @@
+# rtos/idf_component.yml
+version: "0.1.0"
+description: "RTOS utilities for ESP-IDF"
+targets:
+  - esp32
+  - esp32s3
+# dependencies:
+#   idf: ">=5.0"
+#   freertos: "*"
