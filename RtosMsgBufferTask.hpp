@@ -3,6 +3,7 @@
 
 #include "RtosMsgBuffer.hpp"
 #include "RtosTask.hpp"
+#include "rtosutils.h"
 
 // RtosMsgBufferTask wraps a task with a message buffer for variable-sized messages
 
@@ -36,7 +37,7 @@ public:
     void sendTimeout(uint32_t timeoutMs) { _sendTimeoutMs = timeoutMs; }
 
 protected:
-    bool send(const void *data, size_t len) { return  _msgQueue.send(data, len, _sendTimeoutMs); }
+    bool send(const void *data, size_t len) { return _msgQueue.send(data, len, _sendTimeoutMs); }
     virtual void handleMessage(const void *data, size_t len) = 0;
     virtual void handleTimeout() {}
 
@@ -48,17 +49,34 @@ private:
 
     void taskLoop()
     {
+        int32_t timeoutTimeMs = _receiveTimeoutMs;
         while (true)
         {
-            size_t len = _msgQueue.receive(_msg, sizeof(_msg), _receiveTimeoutMs);
-            if (len > 0)
+            if (_receiveTimeoutMs == MSG_TASK_WAIT_FOREVER)
+            {
+                size_t len = _msgQueue.receive(_msg, sizeof(_msg), _receiveTimeoutMs);
                 handleMessage(_msg, len);
+            }
             else
-                handleTimeout();
+            {
+                uint64_t startTimeMs = get_time_in_milliseconds();
+                size_t len = _msgQueue.receive(_msg, sizeof(_msg), _receiveTimeoutMs);
+                if (len > 0)
+                    handleMessage(_msg, len);
+                else
+                    handleTimeout();
+                uint64_t endTimeMs = get_time_in_milliseconds();
+                timeoutTimeMs = _receiveTimeoutMs - (endTimeMs - startTimeMs);
+                if (timeoutTimeMs < 0)
+                {
+                    printf("ERROR: Receive timeout occurred\n");
+                    timeoutTimeMs = _receiveTimeoutMs;
+                }
+            }
         }
     }
 
-    /// @brief The main buffer thant can store 
+    /// @brief The main buffer thant can store
     RtosMsgBuffer _msgQueue;
     uint8_t _msg[MaxMsgSize];
     const char *_name;
