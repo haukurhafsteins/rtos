@@ -57,6 +57,9 @@ MyTask::MyTask(const char *name, size_t stackSize, int priority, size_t qByteSiz
     : RtosMsgBufferTask(name, stackSize, priority, qByteSize)
 {
     ...
+    // To activate the timeout function call this with the apropriate timeout.
+    // Use RTOS_TASK_WAIT_FOREVER to trigger waiting forever.
+    // receiveTimeout(100); // 100 ms timout.
 }
 
 //---------------------------------------------------------------------------
