@@ -40,6 +40,7 @@ protected:
     bool send(const void *data, size_t len) { return _msgQueue.send(data, len, _sendTimeoutMs); }
     virtual void handleMessage(const void *data, size_t len) = 0;
     virtual void handleTimeout() {}
+    virtual void handleTimeoutError() {}
 
 private:
     static void taskEntryPoint(void *p1)
@@ -69,7 +70,7 @@ private:
                 timeoutTimeMs = _receiveTimeoutMs - (endTimeMs - startTimeMs);
                 if (timeoutTimeMs < 0)
                 {
-                    printf("ERROR: Receive timeout occurred\n");
+                    handleTimeoutError();
                     timeoutTimeMs = _receiveTimeoutMs;
                 }
             }
