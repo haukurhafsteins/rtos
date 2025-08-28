@@ -1,6 +1,7 @@
 #include "RtosMsgBuffer.hpp"
 #include "RtosTask.hpp"
 
+#if defined(USE_FREERTOS)
 extern "C"
 {
 #include "freertos/FreeRTOS.h"
@@ -11,15 +12,15 @@ extern "C"
 namespace rtos
 {
     //-------------------------------------------------------------------------
-    // RtosMessageBuffer
+    // RtosMsgBuffer
     //-------------------------------------------------------------------------
-    RtosMessageBuffer(size_t bufferSize)
+    RtosMsgBuffer(size_t bufferSize)
     {
         _bufferSize = bufferSize;
         _handle = xMessageBufferCreate(bufferSize);
         configASSERT(_handle != nullptr);
     }
-    ~RtosMessageBuffer()
+    ~RtosMsgBuffer()
     {
         if (_handle != nullptr)
         {
@@ -28,7 +29,7 @@ namespace rtos
         }
     }
 
-    bool RtosMessageBuffer::send(const void *data, size_t size, TickType_t timeout = portMAX_DELAY)
+    bool RtosMsgBuffer::send(const void *data, size_t size, TickType_t timeout = portMAX_DELAY)
     {
         size_t ret = xMessageBufferSend(_handle, data, size, pdMS_TO_TICKS(timeout));
         if (ret != size)
@@ -39,7 +40,7 @@ namespace rtos
         return true;
     }
 
-    size_t RtosMessageBuffer::receive(void *msgBuf, size_t msgBufSize, TickType_t timeout = portMAX_DELAY)
+    size_t RtosMsgBuffer::receive(void *msgBuf, size_t msgBufSize, TickType_t timeout = portMAX_DELAY)
     {
         size_t ret = xMessageBufferReceive(_handle, msgBuf, msgBufSize, pdMS_TO_TICKS(timeout));
         if (ret == 0)
@@ -56,32 +57,26 @@ namespace rtos
     //-------------------------------------------------------------------------
     // RtosTask
     //-------------------------------------------------------------------------
-    RtosTask(const char *name, uint32_t stackSize, uint32_t priority, TaskFunction func, void *arg)
-    {
-        BaseType_t res = xTaskCreate(func, name, stackSize, arg, priority, &_handle);
-        configASSERT(res == pdPASS);
-    }
     ~RtosTask()
     {
-        if (_handle != nullptr)
+        if (handle_ != nullptr)
         {
-            vTaskDelete(_handle);
-            _handle = nullptr;
+            vTaskDelete(handle_);
+            handle_ = nullptr;
         }
     }
     bool RtosTask::start()
     {
-        bool expected = false;
-        if (!started_.compare_exchange_strong(expected, true))
+        if (started_)
             return false;
-        backend::ThreadSpec spec{name_, stack_, prio_, this, &RtosTask::threadTrampoline};
-        handle_ = backend::thread_create(spec);
-        if (use_gate_)
-            backend::thread_start_gate_open(handle_);
+        BaseType_t res = xTaskCreate(func_, name_, stackSize_, arg_, priority_, &handle_);
+        configASSERT(res == pdPASS);
         return true;
     }
-    backend::ThreadHandle* RtosTask::handle() const { return handle_; }
-
+    bool RtosTask::isStarted() const
+    {
+        return started_;
+    }
 
     //-------------------------------------------------------------------------
     // RtosQueue
@@ -107,3 +102,5 @@ namespace rtos
     }
 
 } // namespace rtos
+
+#endif // USE_FREERTOS
