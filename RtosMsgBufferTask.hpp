@@ -25,12 +25,16 @@ public:
     {
         _receiveTimeoutMs = RTOS_TASK_WAIT_FOREVER;
         _sendTimeoutMs = RTOS_TASK_WAIT_FOREVER;
-        _task = new RtosTask(name, stackSize, priority, &taskEntryPoint, this);
     }
 
     virtual ~RtosMsgBufferTask()
     {
         delete _task;
+    }
+
+    void start()
+    {
+        _task = new RtosTask(_name, _stackSize, _priority, &taskEntryPoint, this);
     }
 
     void receiveTimeout(uint32_t timeoutMs) { _receiveTimeoutMs = timeoutMs; }
