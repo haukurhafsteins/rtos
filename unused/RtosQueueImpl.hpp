@@ -1,4 +1,3 @@
-// FreeRTOS/RtosQueueImpl.hpp
 #pragma once
 
 extern "C" {
@@ -7,13 +6,13 @@ extern "C" {
 }
 
 template<typename T>
-class RtosQueueImpl {
+class RtosQueue {
 public:
-    RtosQueueImpl(size_t length) {
+    RtosQueue(size_t length) {
         _handle = xQueueCreate(length, sizeof(T));
         configASSERT(_handle != nullptr);
     }
-    ~RtosQueueImpl() {
+    ~RtosQueue() {
         if (_handle != nullptr) {
             vQueueDelete(_handle);
             _handle = nullptr;
