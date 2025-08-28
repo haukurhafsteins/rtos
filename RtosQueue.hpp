@@ -1,15 +1,17 @@
-// RtosQueue.hpp
+// FreeRTOS/RtosQueueImpl.hpp
 #pragma once
-
-#if defined(USE_FREERTOS)
-#include "FreeRTOS/RtosQueueImpl.hpp"
-#elif defined(USE_ZEPHYR)
-#include "Zephyr/RtosQueueImpl.hpp"
-#else
-// #error "Unsupported RTOS"
-#endif
-
-// Alias the platform-specific implementation
+#include <cstddef>
+#include "backend.hpp"
 
 template<typename T>
-using RtosQueue = RtosQueueImpl<T>;
+class RtosQueueImpl {
+public:
+    RtosQueueImpl(size_t length);
+    ~RtosQueueImpl();
+
+    bool send(const T& msg, TickType_t timeout = 0);
+    bool receive(T& msg, TickType_t timeout = portMAX_DELAY);
+
+private:
+    QueueHandle _handle;
+};

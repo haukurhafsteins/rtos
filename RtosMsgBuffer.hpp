@@ -1,12 +1,14 @@
-// RtosMsgBuffer.hpp
 #pragma once
 
-#if defined(USE_FREERTOS)
-#include "FreeRTOS/RtosMessageBufferImpl.hpp"
-#elif defined(USE_ZEPHYR)
-#include "Zephyr/RtosMessageBufferImpl.hpp"
-#else
-#error "Unsupported RTOS"
-#endif
+class RtosMessageBuffer {
+public:
+    RtosMessageBuffer(size_t bufferSize);
+    ~RtosMessageBuffer();
+    bool send(const void* data, size_t size, TickType_t timeout = portMAX_DELAY);
+    size_t receive(void* msgBuf, size_t msgBufSize, TickType_t timeout = portMAX_DELAY);
+    size_t size() const { return _bufferSize; }
 
-using RtosMsgBuffer = RtosMessageBufferImpl;
+private:
+    MessageBufferHandle_t _handle;
+    size_t _bufferSize;
+};
