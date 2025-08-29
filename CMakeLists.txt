@@ -1,6 +1,6 @@
 idf_component_register(
     SRCS 
-        "src/rtos_freertos.cpp"
+        "src/rtos_freertos.cpp" "src/rtos_freertos_espidf.cpp"
     INCLUDE_DIRS
         "." "include"
     REQUIRES
