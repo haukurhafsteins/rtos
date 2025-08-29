@@ -1,106 +1,216 @@
-#include "RtosMsgBuffer.hpp"
-#include "RtosTask.hpp"
+#include "backend.hpp"
 
-#if defined(USE_FREERTOS)
-extern "C"
-{
+extern "C" {
 #include "freertos/FreeRTOS.h"
-#include "freertos/message_buffer.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
+#include "freertos/message_buffer.h"
 }
 
-namespace rtos
+namespace {
+
+//-----------------------------------------------------------------------------
+// Tasks
+//-----------------------------------------------------------------------------
+// FreeRTOS expects stack depth in words (StackType_t), not bytes.
+constexpr uint32_t bytes_to_stack_depth(uint32_t bytes) {
+    return (bytes + sizeof(StackType_t) - 1) / sizeof(StackType_t);
+}
+
+} // namespace
+
+namespace rtos::backend {
+
+bool task_create(TaskHandle& out_handle,
+                 const char* name,
+                 uint32_t stack_size_bytes,
+                 uint32_t priority,
+                 TaskFunction func,
+                 void* arg) noexcept
 {
-    //-------------------------------------------------------------------------
-    // RtosMsgBuffer
-    //-------------------------------------------------------------------------
-    RtosMsgBuffer(size_t bufferSize)
-    {
-        _bufferSize = bufferSize;
-        _handle = xMessageBufferCreate(bufferSize);
-        configASSERT(_handle != nullptr);
+    TaskHandle_t native = nullptr;
+    const uint32_t depth = bytes_to_stack_depth(stack_size_bytes);
+    BaseType_t res = xTaskCreate(func, name, depth, arg, priority, &native);
+    if (res != pdPASS) {
+        out_handle = nullptr;
+        return false;
     }
-    ~RtosMsgBuffer()
-    {
-        if (_handle != nullptr)
-        {
-            vMessageBufferDelete(_handle);
-            _handle = nullptr;
-        }
-    }
+    out_handle = static_cast<TaskHandle>(native);
+    return true;
+}
 
-    bool RtosMsgBuffer::send(const void *data, size_t size, TickType_t timeout = portMAX_DELAY)
-    {
-        size_t ret = xMessageBufferSend(_handle, data, size, pdMS_TO_TICKS(timeout));
-        if (ret != size)
-        {
-            printf("RtosMessageBufferImpl::send: failed to send %zu bytes, sent %zu\n", size, ret);
-            return false;
-        }
-        return true;
+void task_delete(TaskHandle handle) noexcept {
+    if (handle) {
+        vTaskDelete(static_cast<TaskHandle_t>(handle));
     }
+}
 
-    size_t RtosMsgBuffer::receive(void *msgBuf, size_t msgBufSize, TickType_t timeout = portMAX_DELAY)
-    {
-        size_t ret = xMessageBufferReceive(_handle, msgBuf, msgBufSize, pdMS_TO_TICKS(timeout));
-        if (ret == 0)
-        {
-            size_t msgSize = xMessageBufferNextLengthBytes(_handle);
-            if (msgSize > 0)
-                printf("RtosMessageBufferImpl::receive: failed to receive data, msgSize: %zu, msgBufSize: %zu\n", msgSize, msgBufSize);
-        }
-        return ret;
-    }
+void delay_ms(uint32_t ms) noexcept {
+    vTaskDelay(pdMS_TO_TICKS(ms));
+}
 
-    size_t size() const { return _bufferSize; }
+void yield() noexcept {
+    taskYIELD();
+}
 
-    //-------------------------------------------------------------------------
-    // RtosTask
-    //-------------------------------------------------------------------------
-    ~RtosTask()
-    {
-        if (handle_ != nullptr)
-        {
-            vTaskDelete(handle_);
-            handle_ = nullptr;
-        }
-    }
-    bool RtosTask::start()
-    {
-        if (started_)
-            return false;
-        BaseType_t res = xTaskCreate(func_, name_, stackSize_, arg_, priority_, &handle_);
-        configASSERT(res == pdPASS);
-        return true;
-    }
-    bool RtosTask::isStarted() const
-    {
-        return started_;
-    }
+TaskHandle current_task() noexcept {
+    return static_cast<TaskHandle>(xTaskGetCurrentTaskHandle());
+}
 
-    //-------------------------------------------------------------------------
-    // RtosQueue
-    //-------------------------------------------------------------------------
-    // QueueHandle_t _handle;
-    RtosQueue(size_t length) {
-        _handle = xQueueCreate(length, sizeof(T));
-        configASSERT(_handle != nullptr);
-    }
-    ~RtosQueue() {
-        if (_handle != nullptr) {
-            vQueueDelete(_handle);
-            _handle = nullptr;
-        }
-    }
 
-    bool RtosQueue::send(const T& msg, TickType_t timeout = 0) {
-        return xQueueSend(_handle, &msg, timeout) == pdTRUE;
+//-----------------------------------------------------------------------------
+// Queues
+//-----------------------------------------------------------------------------
+inline TickType_t to_ticks(uint32_t timeout_ms) {
+    if (timeout_ms == rtos::backend::RTOS_WAIT_FOREVER) {
+        return portMAX_DELAY;
     }
+    return pdMS_TO_TICKS(timeout_ms);
+}
 
-    bool RtosQueue::receive(T& msg, TickType_t timeout = portMAX_DELAY) {
-        return xQueueReceive(_handle, &msg, timeout) == pdTRUE;
+} // namespace
+
+namespace rtos::backend {
+
+// ===== Queues =====
+bool queue_create(QueueHandle& out_handle,
+                  std::size_t length,
+                  std::size_t item_size) noexcept
+{
+    QueueHandle_t native = xQueueCreate(static_cast<UBaseType_t>(length),
+                                        static_cast<UBaseType_t>(item_size));
+    if (!native) {
+        out_handle = nullptr;
+        return false;
     }
+    out_handle = static_cast<QueueHandle>(native);
+    return true;
+}
 
-} // namespace rtos
+void queue_delete(QueueHandle handle) noexcept {
+    if (handle) {
+        vQueueDelete(static_cast<QueueHandle_t>(handle));
+    }
+}
 
-#endif // USE_FREERTOS
+bool queue_send(QueueHandle handle,
+                const void* item,
+                uint32_t timeout_ms) noexcept
+{
+    return xQueueSend(static_cast<QueueHandle_t>(handle),
+                      item,
+                      to_ticks(timeout_ms)) == pdTRUE;
+}
+
+bool queue_receive(QueueHandle handle,
+                   void* out_item,
+                   uint32_t timeout_ms) noexcept
+{
+    return xQueueReceive(static_cast<QueueHandle_t>(handle),
+                         out_item,
+                         to_ticks(timeout_ms)) == pdTRUE;
+}
+
+bool queue_send_isr(QueueHandle handle,
+                    const void* item,
+                    bool* hp_task_woken) noexcept
+{
+    BaseType_t higher = pdFALSE;
+    BaseType_t ok = xQueueSendFromISR(static_cast<QueueHandle_t>(handle),
+                                      item,
+                                      &higher);
+    if (hp_task_woken) *hp_task_woken = (higher == pdTRUE);
+    return ok == pdTRUE;
+}
+
+bool queue_receive_isr(QueueHandle handle,
+                       void* out_item,
+                       bool* hp_task_woken) noexcept
+{
+    BaseType_t higher = pdFALSE;
+    BaseType_t ok = xQueueReceiveFromISR(static_cast<QueueHandle_t>(handle),
+                                         out_item,
+                                         &higher);
+    if (hp_task_woken) *hp_task_woken = (higher == pdTRUE);
+    return ok == pdTRUE;
+}
+
+std::size_t queue_count(QueueHandle handle) noexcept {
+    return static_cast<std::size_t>(uxQueueMessagesWaiting(static_cast<QueueHandle_t>(handle)));
+}
+
+std::size_t queue_spaces(QueueHandle handle) noexcept {
+    return static_cast<std::size_t>(uxQueueSpacesAvailable(static_cast<QueueHandle_t>(handle)));
+}
+
+bool queue_reset(QueueHandle handle) noexcept {
+    return xQueueReset(static_cast<QueueHandle_t>(handle)) == pdPASS;
+}
+
+
+
+//-----------------------------------------------------------------------------
+// Message Buffer
+//-----------------------------------------------------------------------------
+bool msgbuf_create(MsgBufferHandle& out_handle, std::size_t capacity_bytes) noexcept {
+    MessageBufferHandle_t h = xMessageBufferCreate(capacity_bytes);
+    if (!h) { out_handle = nullptr; return false; }
+    out_handle = static_cast<MsgBufferHandle>(h);
+    return true;
+}
+
+void msgbuf_delete(MsgBufferHandle handle) noexcept {
+    if (handle) vMessageBufferDelete(static_cast<MessageBufferHandle_t>(handle));
+}
+
+std::size_t msgbuf_send(MsgBufferHandle handle,
+                        const void* data, std::size_t bytes,
+                        uint32_t timeout_ms) noexcept
+{
+    return xMessageBufferSend(static_cast<MessageBufferHandle_t>(handle),
+                              data, bytes, to_ticks(timeout_ms));
+}
+
+std::size_t msgbuf_receive(MsgBufferHandle handle,
+                           void* out, std::size_t max_bytes,
+                           uint32_t timeout_ms) noexcept
+{
+    return xMessageBufferReceive(static_cast<MessageBufferHandle_t>(handle),
+                                 out, max_bytes, to_ticks(timeout_ms));
+}
+
+std::size_t msgbuf_send_isr(MsgBufferHandle handle,
+                            const void* data, std::size_t bytes,
+                            bool* hp_task_woken) noexcept
+{
+    BaseType_t higher = pdFALSE;
+    std::size_t sent = xMessageBufferSendFromISR(static_cast<MessageBufferHandle_t>(handle),
+                                                 data, bytes, &higher);
+    if (hp_task_woken) *hp_task_woken = (higher == pdTRUE);
+    return sent;
+}
+
+std::size_t msgbuf_receive_isr(MsgBufferHandle handle,
+                               void* out, std::size_t max_bytes,
+                               bool* hp_task_woken) noexcept
+{
+    BaseType_t higher = pdFALSE;
+    std::size_t recvd = xMessageBufferReceiveFromISR(static_cast<MessageBufferHandle_t>(handle),
+                                                     out, max_bytes, &higher);
+    if (hp_task_woken) *hp_task_woken = (higher == pdTRUE);
+    return recvd;
+}
+
+std::size_t msgbuf_next_len(MsgBufferHandle handle) noexcept {
+    return xMessageBufferNextLengthBytes(static_cast<MessageBufferHandle_t>(handle));
+}
+
+std::size_t msgbuf_space_available(MsgBufferHandle handle) noexcept {
+    return xMessageBufferSpaceAvailable(static_cast<MessageBufferHandle_t>(handle));
+}
+
+bool msgbuf_reset(MsgBufferHandle handle) noexcept {
+    return xMessageBufferReset(static_cast<MessageBufferHandle_t>(handle)) == pdPASS;
+}
+
+} // namespace rtos::backend

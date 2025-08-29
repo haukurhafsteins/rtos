@@ -1,13 +1,10 @@
-// RtosMsgBufferTask.hpp
 #pragma once
 
 #include "RtosMsgBuffer.hpp"
 #include "RtosTask.hpp"
 #include "rtosutils.h"
 
-// RtosMsgBufferTask wraps a task with a message buffer for variable-sized messages
-
-constexpr uint32_t MSG_TASK_WAIT_FOREVER = 0xffffffffUL;
+constexpr uint32_t RTOS_TASK_WAIT_FOREVER = 0xffffffffUL;
 
 class IRtosMsgReceiver
 {
@@ -25,12 +22,17 @@ public:
     {
         _receiveTimeoutMs = RTOS_TASK_WAIT_FOREVER;
         _sendTimeoutMs = RTOS_TASK_WAIT_FOREVER;
-        _task = new RtosTask(name, stackSize, priority, &taskEntryPoint, this);
     }
 
     virtual ~RtosMsgBufferTask()
     {
         delete _task;
+    }
+
+    void start()
+    {
+        _task = new RtosTask(_name, _stackSize, _priority, &taskEntryPoint, this);
+        _task->start();
     }
 
     void receiveTimeout(uint32_t timeoutMs) { _receiveTimeoutMs = timeoutMs; }
@@ -53,7 +55,7 @@ private:
         int32_t timeoutTimeMs = _receiveTimeoutMs;
         while (true)
         {
-            if (_receiveTimeoutMs == MSG_TASK_WAIT_FOREVER)
+            if (_receiveTimeoutMs == RTOS_TASK_WAIT_FOREVER)
             {
                 size_t len = _msgQueue.receive(_msg, sizeof(_msg), _receiveTimeoutMs);
                 handleMessage(_msg, len);
