@@ -17,24 +17,15 @@ template <size_t MaxMsgSize>
 class RtosMsgBufferTask : public IRtosMsgReceiver
 {
 public:
-    RtosMsgBufferTask(const char *name, size_t stackSize, int priority, size_t bufferSize)
-        : _msgQueue(bufferSize), _name(name), _stackSize(stackSize), _priority(priority)
+    RtosMsgBufferTask(const char *name, uint32_t stack_bytes, uint32_t prio, std::size_t buf_cap)
+        : _msgQueue(buf_cap),
+          _task(name, stack_bytes, prio, &RtosMsgBufferTask::TaskEntry, this)
     {
         _receiveTimeoutMs = RTOS_TASK_WAIT_FOREVER;
         _sendTimeoutMs = RTOS_TASK_WAIT_FOREVER;
     }
 
-    virtual ~RtosMsgBufferTask()
-    {
-        delete _task;
-    }
-
-    void start()
-    {
-        _task = new RtosTask(_name, _stackSize, _priority, &taskEntryPoint, this);
-        _task->start();
-    }
-
+    void start() { _task.start(); }
     void receiveTimeout(uint32_t timeoutMs) { _receiveTimeoutMs = timeoutMs; }
     void sendTimeout(uint32_t timeoutMs) { _sendTimeoutMs = timeoutMs; }
 
@@ -45,10 +36,7 @@ protected:
     virtual void handleTimeoutError() {}
 
 private:
-    static void taskEntryPoint(void *p1)
-    {
-        static_cast<RtosMsgBufferTask *>(p1)->taskLoop();
-    }
+    static void TaskEntry(void* p) { static_cast<RtosMsgBufferTask*>(p)->taskLoop(); }
 
     void taskLoop()
     {
@@ -79,13 +67,9 @@ private:
         }
     }
 
-    /// @brief The main buffer thant can store
     RtosMsgBuffer _msgQueue;
-    uint8_t _msg[MaxMsgSize];
-    const char *_name;
-    size_t _stackSize;
-    int _priority;
-    RtosTask *_task;
+    uint8_t _msg[MaxMsgSize]{};
+    RtosTask _task;
     uint32_t _receiveTimeoutMs;
     uint32_t _sendTimeoutMs;
 };
