@@ -3,6 +3,9 @@
 #include <type_traits>
 #include <utility>
 #include "backend.hpp"
+#include "time.hpp"
+
+using rtos::time::Millis;
 
 class RtosMsgBuffer {
 public:
@@ -33,19 +36,19 @@ public:
 
     // Raw byte API (returns bytes sent/received)
     std::size_t send(const void* data, std::size_t bytes,
-                     uint32_t timeout_ms = rtos::backend::RTOS_WAIT_FOREVER) noexcept
+                     Millis timeout_ms = Millis::max()) noexcept
     {
         return rtos::backend::msgbuf_send(_handle, data, bytes, timeout_ms);
     }
 
     bool send_all(const void* data, std::size_t bytes,
-                  uint32_t timeout_ms = rtos::backend::RTOS_WAIT_FOREVER) noexcept
+                  Millis timeout_ms = Millis::max()) noexcept
     {
         return send(data, bytes, timeout_ms) == bytes;
     }
 
     std::size_t receive(void* out, std::size_t max_bytes,
-                        uint32_t timeout_ms = rtos::backend::RTOS_WAIT_FOREVER) noexcept
+                        Millis timeout_ms = Millis::max()) noexcept
     {
         return rtos::backend::msgbuf_receive(_handle, out, max_bytes, timeout_ms);
     }

@@ -3,8 +3,12 @@
 #include "RtosMsgBuffer.hpp"
 #include "RtosTask.hpp"
 #include "rtosutils.h"
+#include "time.hpp"
 
-constexpr uint32_t RTOS_TASK_WAIT_FOREVER = 0xffffffffUL;
+using rtos::time::Millis;
+using rtos::time::now_ms;
+
+constexpr Millis RTOS_TASK_WAIT_FOREVER = Millis::max();
 
 class IRtosMsgReceiver
 {
@@ -26,8 +30,8 @@ public:
     }
 
     void start() { _task.start(); }
-    void receiveTimeout(uint32_t timeoutMs) { _receiveTimeoutMs = timeoutMs; }
-    void sendTimeout(uint32_t timeoutMs) { _sendTimeoutMs = timeoutMs; }
+    void receiveTimeout(Millis timeoutMs) { _receiveTimeoutMs = timeoutMs; }
+    void sendTimeout(Millis timeoutMs) { _sendTimeoutMs = timeoutMs; }
 
 protected:
     bool send(const void *data, size_t len) { return _msgQueue.send(data, len, _sendTimeoutMs); }
@@ -40,7 +44,7 @@ private:
 
     void taskLoop()
     {
-        int32_t timeoutTimeMs = _receiveTimeoutMs;
+        Millis timeoutTimeMs = _receiveTimeoutMs;
         while (true)
         {
             if (_receiveTimeoutMs == RTOS_TASK_WAIT_FOREVER)
@@ -50,15 +54,15 @@ private:
             }
             else
             {
-                uint64_t startTimeMs = get_time_in_milliseconds();
+                Millis startTimeMs = now_ms();
                 size_t len = _msgQueue.receive(_msg, sizeof(_msg), _receiveTimeoutMs);
                 if (len > 0)
                     handleMessage(_msg, len);
                 else
                     handleTimeout();
-                uint64_t endTimeMs = get_time_in_milliseconds();
+                Millis endTimeMs = now_ms();
                 timeoutTimeMs = _receiveTimeoutMs - (endTimeMs - startTimeMs);
-                if (timeoutTimeMs < 0)
+                if (timeoutTimeMs < Millis(0))
                 {
                     handleTimeoutError();
                     timeoutTimeMs = _receiveTimeoutMs;
@@ -70,6 +74,6 @@ private:
     RtosMsgBuffer _msgQueue;
     uint8_t _msg[MaxMsgSize]{};
     RtosTask _task;
-    uint32_t _receiveTimeoutMs;
-    uint32_t _sendTimeoutMs;
+    Millis _receiveTimeoutMs;
+    Millis _sendTimeoutMs;
 };

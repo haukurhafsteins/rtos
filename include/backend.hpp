@@ -1,13 +1,14 @@
 #pragma once
 #include <cstdint>
 #include <cstddef>
+#include "time.hpp"
 
 using TaskFunction = void (*)(void*);
-
+using Millis = rtos::time::Millis;
 namespace rtos::backend {
 
 // ========= Common =========
-inline constexpr uint32_t RTOS_WAIT_FOREVER = 0xFFFFFFFFu;
+inline constexpr Millis RTOS_WAIT_FOREVER = Millis::max();
 
 // ===== Task backend (already present) =====
 using TaskHandle = void*;
@@ -39,11 +40,11 @@ void   msgbuf_delete(MsgBufferHandle handle) noexcept;
 
 std::size_t msgbuf_send(MsgBufferHandle handle,
                         const void* data, std::size_t bytes,
-                        uint32_t timeout_ms) noexcept;
+                        Millis timeout_ms) noexcept;
 
 std::size_t msgbuf_receive(MsgBufferHandle handle,
                            void* out, std::size_t max_bytes,
-                           uint32_t timeout_ms) noexcept;
+                           Millis timeout_ms) noexcept;
 
 std::size_t msgbuf_send_isr(MsgBufferHandle handle,
                             const void* data, std::size_t bytes,

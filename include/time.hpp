@@ -25,5 +25,7 @@ using Seconds  = std::chrono::seconds;
 // Sleep wrappers (map to vTaskDelay/k_sleep/etc.)
 void sleep_for(Millis ms) noexcept;
 void sleep_until(HighResClock::time_point tp) noexcept;
+Millis now_ms() noexcept;
+Seconds now_s() noexcept;
 
 } // namespace rtos::time

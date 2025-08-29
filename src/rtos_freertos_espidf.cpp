@@ -15,6 +15,16 @@ namespace rtos::time
         return HighResClock::time_point(Micros(esp_timer_get_time()));
     }
 
+    Millis now_ms() noexcept
+    {
+        return Millis(esp_timer_get_time() / 1000);
+    }
+
+    Seconds now_s() noexcept
+    {
+        return Seconds(esp_timer_get_time() / 1000000);
+    }
+
     void sleep_for(Millis ms) noexcept { vTaskDelay(pdMS_TO_TICKS(ms.count())); }
 
     void sleep_until(HighResClock::time_point tp) noexcept
