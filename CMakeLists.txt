@@ -1,9 +1,8 @@
-# components/rtos/CMakeLists.txt
 idf_component_register(
     SRCS 
-                          # add your source files here (c/cc/cpp)
+        "src/rtos_freertos.cpp" "src/rtos_freertos_espidf.cpp"
     INCLUDE_DIRS
-        "."               # public headers: components/rtos/include/...
+        "." "include"
     REQUIRES
         # other components you need (e.g. freertos, driver, esp_timer)
 )
