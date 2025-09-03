@@ -14,7 +14,7 @@ In your makefile define one of the following for the OS to use:
 ### The Task Class
 #### Singleton
 ```c++
-// Header file
+// Header file MyTask.hpp
 #include <RtosMsgBufferTask.hpp>
 #include <SingletonTask.hpp>
 #include <QMsg.hpp>
@@ -48,7 +48,8 @@ protected:
 ```
 
 ```c++
-// Source File
+// Source File MyTask.cpp
+#include "MyTask.hpp"
 
 //---------------------------------------------------------------------------
 // Class initialization
