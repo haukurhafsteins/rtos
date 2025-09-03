@@ -1,5 +1,6 @@
 #include "backend.hpp"
 #include "time.hpp"
+#include "rtos_assert.hpp"
 
 extern "C"
 {
@@ -62,7 +63,7 @@ namespace rtos::backend
     }
 
     //-----------------------------------------------------------------------------
-    // Queues
+    // Time
     //-----------------------------------------------------------------------------
     inline TickType_t to_ticks(Millis timeout_ms)
     {
@@ -73,12 +74,9 @@ namespace rtos::backend
         return pdMS_TO_TICKS(timeout_ms.count());
     }
 
-} // namespace
-
-namespace rtos::backend
-{
-
-    // ===== Queues =====
+    //-----------------------------------------------------------------------------
+    // Queues
+    //-----------------------------------------------------------------------------
     bool queue_create(QueueHandle &out_handle, std::size_t length, std::size_t item_size) noexcept
     {
         QueueHandle_t native = xQueueCreate(static_cast<UBaseType_t>(length),
@@ -227,4 +225,21 @@ namespace rtos::backend
         return xMessageBufferReset(static_cast<MessageBufferHandle_t>(handle)) == pdPASS;
     }
 
+    //-----------------------------------------------------------------------------
+    // Asserts
+    //-----------------------------------------------------------------------------
+    [[noreturn]] void assert_fail(const char * /*expr*/,
+                                  const char * /*file*/,
+                                  int /*line*/,
+                                  const char * /*func*/) noexcept
+    {
+        // If you want file/line logging, add your logger/ITM/SEGGER print here.
+        // Then route to FreeRTOS's assert path:
+        configASSERT(0);
+        // configASSERT is noreturn in practice; just in case:
+        while (true)
+        {
+            taskYIELD();
+        }
+    }
 } // namespace rtos::backend

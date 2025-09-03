@@ -1,25 +1,24 @@
 // SingletonTaskTemplate.hpp
 #pragma once
-
-// Use this template to create singleton-style tasks with configurable construction
-// It supports manual lifetime, compile-time safety, and easy reuse across tasks.
+#include "rtos_assert.hpp"
 
 template <typename Derived>
 class SingletonTask {
 public:
     static Derived& get() {
-        configASSERT(_instance); // or custom assert/log
+        RTOS_ENSURE(_instance != nullptr);
         return *_instance;
     }
 
     static void bind(Derived& instance) {
+        // prevent accidental rebinds
+        RTOS_ENSURE(_instance == nullptr);
         _instance = &instance;
     }
 
+    static bool is_bound() { return _instance != nullptr; }
+
 protected:
     SingletonTask() = default;
-    static Derived* _instance;
+    static inline Derived* _instance = nullptr; // C++17 inline var avoids separate definition
 };
-
-// Define the static pointer in your .cpp file like:
-// template<> AhrsTask* SingletonTask<AhrsTask>::_instance = nullptr;
