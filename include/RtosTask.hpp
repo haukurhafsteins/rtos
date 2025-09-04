@@ -54,7 +54,7 @@ public:
     bool started() const noexcept { return _started; }
 
     // Convenience wrappers
-    static void sleep_ms(uint32_t ms) noexcept { rtos::backend::delay_ms(ms); }
+    static void sleep_ms(Millis duration) noexcept { rtos::backend::delay_ms(duration); }
     static void yield() noexcept { rtos::backend::yield(); }
     static rtos::backend::TaskHandle current() noexcept { return rtos::backend::current_task(); }
 

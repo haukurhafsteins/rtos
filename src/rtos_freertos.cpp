@@ -54,7 +54,7 @@ namespace rtos::backend
         }
     }
 
-    void delay_ms(uint32_t ms) noexcept { vTaskDelay(pdMS_TO_TICKS(ms)); }
+    void delay_ms(Millis duration) noexcept { vTaskDelay(pdMS_TO_TICKS(duration.count())); }
     void yield() noexcept { taskYIELD(); }
 
     TaskHandle current_task() noexcept
