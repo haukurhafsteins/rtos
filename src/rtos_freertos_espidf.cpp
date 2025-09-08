@@ -437,44 +437,65 @@ void RtosLog::unlock()
     }
 }
 
-void RtosLog::vlog(LogLevel level, const char *tag, const char *fmt, va_list ap)
+void RtosLog::vlog(LogLevel level, const char *tag, const char *msg, va_list ap)
 {
-    if (!shouldEmit(level, tag))
-        return;
-
-    // Format the message body
-    char body[RTOS_LOG_LINE_MAX];
-    int n = std::vsnprintf(body, sizeof(body), fmt ? fmt : "", ap);
-    if (n < 0)
-        return; // formatting error
-
-    // Compose final line with prefix
-    char line[RTOS_LOG_LINE_MAX];
-
-#if RTOS_LOG_SHOW_FILELINE
-    // Detect presence of FILE and LINE via GNU extensions: not available here; caller may bake in if desired
-#endif
-
-    const char *t = tag ? tag : "rtos";
-
-#if RTOS_LOG_SHOW_TIME
-    int m = std::snprintf(line, sizeof(line), "[%llu] %c/%s: %s", rtos::time::now_ms().count(), levelChar(level), t, body);
-#else
-    int m = std::snprintf(line, sizeof(line), "%c/%s: %s", levelChar(level), t, body);
-#endif
-    if (m < 0)
-        return;
-    size_t lineLen = (m < (int)sizeof(line)) ? (size_t)m : sizeof(line) - 1;
-
-    // Write to sinks
-    lock();
-    for (size_t i = 0; i < s_sinkCount; ++i)
+    switch (level)
     {
-        auto *s = s_sinks[i];
-        if (s && s->enabled(level))
-            s->write(level, t, line, lineLen);
+    case rtos::LogLevel::Error:
+        ESP_LOGE(tag, "%s", msg);
+        break;
+    case rtos::LogLevel::Warn:
+        ESP_LOGW(tag, "%s", msg);
+        break;
+    case rtos::LogLevel::Info:
+        ESP_LOGI(tag, "%s", msg);
+        break;
+    case rtos::LogLevel::Debug:
+        ESP_LOGD(tag, "%s", msg);
+        break;
+    case rtos::LogLevel::Verbose:
+        ESP_LOGV(tag, "%s", msg);
+        break;
+    default:
+        break;
     }
-    unlock();
+
+//     if (!shouldEmit(level, tag))
+//         return;
+
+//     // Format the message body
+//     char body[RTOS_LOG_LINE_MAX];
+//     int n = std::vsnprintf(body, sizeof(body), msg ? msg : "", ap);
+//     if (n < 0)
+//         return; // formatting error
+
+//     // Compose final line with prefix
+//     char line[RTOS_LOG_LINE_MAX];
+
+// #if RTOS_LOG_SHOW_FILELINE
+//     // Detect presence of FILE and LINE via GNU extensions: not available here; caller may bake in if desired
+// #endif
+
+//     const char *t = tag ? tag : "rtos";
+
+// #if RTOS_LOG_SHOW_TIME
+//     int m = std::snprintf(line, sizeof(line), "[%llu] %c/%s: %s", rtos::time::now_ms().count(), levelChar(level), t, body);
+// #else
+//     int m = std::snprintf(line, sizeof(line), "%c/%s: %s", levelChar(level), t, body);
+// #endif
+//     if (m < 0)
+//         return;
+//     size_t lineLen = (m < (int)sizeof(line)) ? (size_t)m : sizeof(line) - 1;
+
+//     // Write to sinks
+//     lock();
+//     for (size_t i = 0; i < s_sinkCount; ++i)
+//     {
+//         auto *s = s_sinks[i];
+//         if (s && s->enabled(level))
+//             s->write(level, t, line, lineLen);
+//     }
+//     unlock();
 }
 
 void RtosLog::log(LogLevel level, const char *tag, const char *fmt, ...)
@@ -505,6 +526,7 @@ void EspIdfLogSink::write(LogLevel level, const char *tag, const char *msg, size
         ESP_LOGW(tag, "%s", msg);
         break;
     case rtos::LogLevel::Info:
+        printf("I/%s: %s\n", tag, msg);
         ESP_LOGI(tag, "%s", msg);
         break;
     case rtos::LogLevel::Debug:
