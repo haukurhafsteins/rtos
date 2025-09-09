@@ -6,12 +6,13 @@ A tiny, header-only C++ utility for tracking **minimum**, **maximum**, and **ave
 
 ## Features
 
-- **O(1)** per `add()`; constant memory.
-- Works with **integers** and **floats**.
-- **Configurable accumulator** (`SumT`) to prevent overflow with integer inputs.
-- Optional **NaN filtering** at compile time.
-- **Fixed-point average** helper for Q formats / milli-units.
-- No `<limits>`, no exceptions, no STL containers.
+* **O(1)** per `add()`; constant memory.
+* Works with **integers** and **floats**.
+* **Configurable accumulator** (`SumT`) to prevent overflow with integer inputs.
+* Optional **NaN filtering** at compile time.
+* **Fixed-point average** helper for Q formats / milli-units.
+* Peak, peak-to-peak, midrange helpers.
+* No `<limits>`, no exceptions, no STL containers.
 
 ---
 
@@ -28,6 +29,7 @@ class MinMaxAvg;
 ```
 
 ### Includes required by the header
+
 ```cpp
 #include <stdint.h>
 #include <stddef.h>
@@ -41,20 +43,25 @@ class MinMaxAvg;
 
 All methods are `O(1)` unless noted.
 
-| Method | Signature | Notes |
-|---|---|---|
-| Constructor | `MinMaxAvg()` | Calls `reset()` |
-| Reset | `void reset()` | Clears count/sum; marks stats as empty |
-| Add sample | `void add(T v)` | Updates min/max/sum/count; skips NaN if `IGNORE_NAN` and `T` is floating |
-| Add many | `void addMany(const T* data, size_t n)` | Loops `add()` over a buffer |
-| Has data? | `bool hasData() const` | `true` after first valid sample |
-| Count | `uint32_t getCount() const` | Number of accepted samples |
-| Min | `T getMin() const` | Valid only if `hasData()` |
-| Max | `T getMax() const` | Valid only if `hasData()` |
-| Sum | `SumT getSum() const` | Exposes the accumulator |
-| Average | `SumT getAvg() const` | Returns `sum/count` or `0` if empty |
-| Avg (rounded int) | `SumT getAvgRounded() const` *(enabled only if `SumT` is integral)* | **Round-to-nearest, half-away-from-zero**; returns `0` if empty |
-| Fixed-point avg | `template<typename OutT> OutT getAvgFixed(OutT scale) const` | Returns `(avg * scale)` rounded to nearest as `OutT` (e.g., Q16.16 or milli-units) |
+| Method              | Signature                                                           | Notes                                                                              |     |    |     |                    |
+| ------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --- | -- | --- | ------------------ |
+| Default constructor | `MinMaxAvg()`                                                       | Calls `reset()`                                                                    |     |    |     |                    |
+| Value constructor   | `explicit MinMaxAvg(T initialValue)`                                | Initializes with one sample (equivalent to `reset(); add(v)`)                      |     |    |     |                    |
+| Reset               | `void reset()`                                                      | Clears count/sum; marks stats as empty                                             |     |    |     |                    |
+| Add sample          | `void add(T v)`                                                     | Updates min/max/sum/count; skips NaN if `IGNORE_NAN` and `T` is floating           |     |    |     |                    |
+| Add many            | `void addMany(const T* data, size_t n)`                             | Loops `add()` over a buffer                                                        |     |    |     |                    |
+| Has data?           | `bool hasData() const`                                              | `true` if `getCount()>0`                                                           |     |    |     |                    |
+| Count               | `uint32_t getCount() const`                                         | Number of accepted samples                                                         |     |    |     |                    |
+| Min                 | `T getMin() const`                                                  | Valid only if `hasData()`                                                          |     |    |     |                    |
+| Max                 | `T getMax() const`                                                  | Valid only if `hasData()`                                                          |     |    |     |                    |
+| Sum                 | `SumT getSum() const`                                               | Exposes the accumulator                                                            |     |    |     |                    |
+| Average             | `SumT getAvg() const`                                               | Returns `sum/count` or `0` if empty                                                |     |    |     |                    |
+| Avg (rounded int)   | `SumT getAvgRounded() const` *(enabled only if `SumT` is integral)* | **Round-to-nearest, half-away-from-zero**; returns `0` if empty                    |     |    |     |                    |
+| Fixed-point avg     | `template<typename OutT> OutT getAvgFixed(OutT scale) const`        | Returns `(avg * scale)` rounded to nearest as `OutT` (e.g., Q16.16 or milli-units) |     |    |     |                    |
+| Peak                | `T getPeak() const`                                                 | Returns the **signed** peak: `max` if \`                                           | max | >= | min | `, else `min\`.    |
+| Peak (absolute)     | `T getPeakAbs() const`                                              | Returns \`max(                                                                     | max | ,  | min | )\`; non-negative. |
+| Peak-to-peak        | `T getPeakToPeak() const`                                           | `max - min`.                                                                       |     |    |     |                    |
+| Midrange            | `T getMidRange() const`                                             | `(max + min) / 2` (integer division for integral `T`).                             |     |    |     |                    |
 
 > **Contract:** If `hasData()` is `false`, `getMin()/getMax()` are not meaningful; `getAvg()` returns `0`.
 
@@ -63,6 +70,7 @@ All methods are `O(1)` unless noted.
 ## Usage Examples
 
 ### 1) Integer samples with wide accumulator
+
 ```cpp
 using Stats = MinMaxAvg<int32_t, int64_t>;  // 64-bit sum prevents overflow
 Stats s;
@@ -76,6 +84,7 @@ int64_t avg = s.getAvgRounded(); // 12 (35/3 rounded to nearest)
 ```
 
 ### 2) Float samples, ignoring NaNs
+
 ```cpp
 using FStats = MinMaxAvg<float, double, true>; // IGNORE_NAN = true
 FStats f;
@@ -86,6 +95,7 @@ double avg = f.getAvg(); // 1.5
 ```
 
 ### 3) Fixed-point outputs
+
 ```cpp
 MinMaxAvg<int16_t, int32_t> fx;
 fx.addMany(samples, count);
@@ -97,54 +107,74 @@ int32_t avg_q16_16 = fx.getAvgFixed<int32_t>(1 << 16);
 int32_t avg_milli = fx.getAvgFixed<int32_t>(1000);   // e.g., 1234 == 1.234
 ```
 
+### 4) Range helpers (peak, p2p, midrange)
+
+```cpp
+MinMaxAvg<int32_t, int64_t> s2;
+s2.addMany(vals, n);
+int32_t p       = s2.getPeak();        // signed peak
+int32_t p_abs   = s2.getPeakAbs();     // absolute peak
+int32_t p2p     = s2.getPeakToPeak();  // max - min
+int32_t mid     = s2.getMidRange();    // (max + min)/2 (integer division if T is integral)
+```
+
 ---
 
 ## Configuration & Portability
 
-- **Choose `SumT` wisely.** For integer inputs, pick a wider accumulator:
-  - `int16_t` → `int32_t` or `int64_t`
-  - `int32_t` → `int64_t`
-  - For floats, `double` is a good default; on some MCUs `double==float` in size.
-- **NaN handling:** `IGNORE_NAN=true` filters NaNs only when `T` is floating. For integer `T`, this flag has no effect.
-- **Dependencies:** Only C headers; works in freestanding/embedded environments.
-- **Thread/ISR safety:** The class is **not** inherently thread-safe. If updated from ISRs and read from tasks, guard with a critical section or snapshot pattern.
+* **Choose `SumT` wisely.** For integer inputs, pick a wider accumulator:
+
+  * `int16_t` → `int32_t` or `int64_t`
+  * `int32_t` → `int64_t`
+  * For floats, `double` is a good default; on some MCUs `double==float` in size.
+* **NaN handling:** `IGNORE_NAN=true` filters NaNs only when `T` is floating. For integer `T`, this flag has no effect.
+* **Dependencies:** Only C headers; works in freestanding/embedded environments.
+* **Thread/ISR safety:** The class is **not** inherently thread-safe. If updated from ISRs and read from tasks, guard with a critical section or snapshot pattern.
 
 ---
 
 ## Performance Notes
 
-- **Per `add()`**: 1–2 comparisons, 1 addition, 1 increment, a couple of branches. No heap, no division.
-- **Average calculation**: `getAvg()` performs one division. `getAvgFixed()` uses `long double` for precision; if that’s heavy on your MCU, you can:
-  - Change `long double` to `double` in the implementation, or
-  - Provide an integer-only variant tailored to your range and `scale`.
+* **Per `add()`**: 1–2 comparisons, 1 addition, 1 increment, a couple of branches. No heap, no division.
+* **Average calculation**: `getAvg()` performs one division. `getAvgFixed()` uses `long double` for precision; if that’s heavy on your MCU, you can:
+
+  * Change `long double` to `double` in the implementation, or
+  * Provide an integer-only variant tailored to your range and `scale`.
 
 ---
 
 ## Numerical Behavior
 
-- **Overflow**: If `SumT` is too small, `sum_` overflows (wraps for integral `SumT`). Prevent by selecting an adequately wide `SumT`.
-- **Rounding**:
-  - `getAvgRounded()` rounds to nearest with **half-away-from-zero** bias.
-  - `getAvgFixed(scale)` rounds to nearest using `±0.5` offset before cast.
-- **Empty state**: When no samples were accepted, `getAvg*()` returns `0`; `getMin()/getMax()` must not be used (check `hasData()`).
+* **Overflow**: If `SumT` is too small, `sum_` overflows (wraps for integral `SumT`). Prevent by selecting an adequately wide `SumT`.
+* **Rounding**:
+
+  * `getAvgRounded()` rounds to nearest with **half-away-from-zero** bias.
+  * `getAvgFixed(scale)` rounds to nearest using `±0.5` offset before cast.
+* **Empty state**: When no samples were accepted, `getAvg*()` returns `0`; `getMin()/getMax()` must not be used (check `hasData()`).
+* **Range helpers**:
+
+  * `getMidRange()` computes `(max + min) / 2` in type `T`. For integral `T`, this is integer division, and `max + min` can overflow `T` near extremes. If you need safety, compute in a wider type (e.g., cast to `SumT`).
+  * `getPeakAbs()` negates `min` when `min < 0`. For two's-complement types, `-INT_MIN` is undefined/overflow; if this edge case matters, use a wider type or compute via absolute values in `SumT`.
+  * `getPeakToPeak()` returns `max - min` in type `T`. This can overflow signed `T` if the span exceeds the representable range; compute in `SumT` when necessary.
 
 ---
 
 ## Memory Footprint
 
-Approximate size (bytes) ≈ `sizeof(uint32_t)` + `sizeof(SumT)` + `2*sizeof(T)` + `sizeof(bool)` + padding.
+Approximate size (bytes) ≈ `sizeof(uint32_t)` + `sizeof(SumT)` + `2*sizeof(T)` + padding.
 
 Examples on a typical 32-bit MCU:
-- `T=int32_t`, `SumT=int64_t` → ~24 bytes (due to padding).
-- `T=float`, `SumT=double` → ~28–32 bytes (platform-dependent).
+
+* `T=int32_t`, `SumT=int64_t` → \~24 bytes (due to padding).
+* `T=float`, `SumT=double` → \~28–32 bytes (platform-dependent).
 
 ---
 
 ## Typical Wiring (CMake / Arduino / ESP-IDF)
 
-- **CMake**: add the header to your target include paths.
-- **Arduino**: place `MinMaxAvg.hpp` in your `src/` or library folder, then `#include "MinMaxAvg.hpp"`.
-- **ESP-IDF**: add to component `include/` and list the include directory in `CMakeLists.txt`.
+* **CMake**: add the header to your target include paths.
+* **Arduino**: place `MinMaxAvg.hpp` in your `src/` or library folder, then `#include "MinMaxAvg.hpp"`.
+* **ESP-IDF**: add to component `include/` and list the include directory in `CMakeLists.txt`.
 
 ---
 
@@ -171,12 +201,12 @@ taskEXIT_CRITICAL();
 
 ## Testing Checklist
 
-- Empty state: `hasData()==false`, avg=0.
-- Single value: min=max=value; avg=value.
-- Mixed signs: rounding behavior correct (check ±0.5 cases).
-- NaN inputs (when `IGNORE_NAN=true`): ignored, counts unaffected.
-- Large `n`: ensure `SumT` prevents overflow.
-- Buffer ingestion via `addMany`.
+* Empty state: `hasData()==false`, avg=0.
+* Single value: min=max=value; avg=value.
+* Mixed signs: rounding behavior correct (check ±0.5 cases).
+* NaN inputs (when `IGNORE_NAN=true`): ignored, counts unaffected.
+* Large `n`: ensure `SumT` prevents overflow.
+* Buffer ingestion via `addMany`.
 
 ---
 
@@ -193,4 +223,3 @@ using StatsI16 = MinMaxAvg<int16_t, int32_t>;
 using StatsI32 = MinMaxAvg<int32_t, int64_t>;
 using StatsF32 = MinMaxAvg<float, double, true>;   // ignore NaNs
 ```
-
