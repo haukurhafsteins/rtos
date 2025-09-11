@@ -41,7 +41,7 @@ private:
 };
 
 //--------------------------------------------
-// Typed topic: publishes QMsg<Cmd, T>
+// Typed topic: publishes QMsg<PayloadType>
 template <typename PayloadType>
 class Topic : public TopicBase
 {
@@ -64,7 +64,9 @@ public:
     }
 
 private:
-    const PayloadType *data_; // external storage
+    const PayloadType *data_;
+    uint32_t writeCmd_{std::numeric_limits<uint32_t>::max()};
+    std::function<bool(const PayloadType &)> writeCallback_;
 };
 
 //--------------------------------------------
@@ -84,6 +86,8 @@ public:
     }
     // Removes the topic from the registry but does NOT delete the topic object.
     // The caller is responsible for managing the lifetime of the topic object.
+    // TODO: Anyone can remove any topic. Maybe restrict this to the owner or
+    // use a registration token returned by registerTopic?
     static bool remove(const char *name)
     {
         std::lock_guard<std::mutex> lock(mutex_);
