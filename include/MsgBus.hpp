@@ -3,6 +3,7 @@
 #include <list>
 #include <string>
 #include <cstdint>
+#include <mutex>
 #include "RtosMsgBuffer.hpp"
 #include "QMsg.hpp"
 
@@ -74,16 +75,19 @@ public:
     template <typename T>
     static bool registerTopic(const char *name, Topic<T> *topic)
     {
-        auto it = topics_.find(name);
+        auto strName = std::string(name);
+        auto it = topics_.find(strName);
         if (it != topics_.end())
             return false;
-        topics_[name] = topic;
+        topics_[strName] = topic;
         return true;
     }
-
+    // Removes the topic from the registry but does NOT delete the topic object.
+    // The caller is responsible for managing the lifetime of the topic object.
     static bool remove(const char *name)
     {
-        auto it = topics_.find(name);
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = topics_.find(std::string(name));
         if (it == topics_.end())
             return false;
         topics_.erase(it);
@@ -92,7 +96,8 @@ public:
 
     static bool subscribe(const char *name, RtosMsgBuffer &receiver, uint32_t msgId)
     {
-        auto it = topics_.find(name);
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = topics_.find(std::string(name));
         if (it == topics_.end())
             return false;
         it->second->addSubscriber(receiver, msgId);
@@ -101,10 +106,12 @@ public:
 
     static TopicBase *get(const char *name)
     {
-        auto it = topics_.find(name);
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = topics_.find(std::string(name));
         return (it == topics_.end()) ? nullptr : it->second;
     }
 
 private:
     inline static std::map<std::string, TopicBase *> topics_{};
+    inline static std::mutex mutex_;
 };
