@@ -17,15 +17,15 @@ public:
     virtual bool notify() = 0;
 
     void addSubscriber(RtosMsgBuffer& q, uint32_t msgId) {
-        subs_.push_back({ &q, msgId });
+        subscribers_.push_back({ &q, msgId });
     }
     void removeSubscriber(RtosMsgBuffer& q) {
-        subs_.remove_if([&](const Sub& s){ return s.q == &q; });
+        subscribers_.remove_if([&](const Sub& s){ return s.q == &q; });
     }
 
 protected:
     struct Sub { RtosMsgBuffer* q; uint32_t id; };
-    std::list<Sub> subs_;
+    std::list<Sub> subscribers_;
 
 private:
     const char* name_;
@@ -43,7 +43,7 @@ public:
 
     bool notify() override {
         if (!data_) return false;
-        for (auto& s : this->subs_) {
+        for (auto& s : this->subscribers_) {
             QMsg<Cmd, T> msg(static_cast<Cmd>(s.id), *data_);
             s.q->send(&msg, msg.size());
         }
