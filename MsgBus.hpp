@@ -33,7 +33,7 @@ private:
 
 //--------------------------------------------
 // Typed topic: publishes QMsg<Cmd, T>
-template<typename T, typename Cmd>
+template<typename Cmd, typename T>
 class Topic : public TopicBase {
 public:
     Topic(const char* name, const T* dataPtr)
@@ -58,10 +58,10 @@ private:
 // Registry: central message bus
 class MsgBus {
 public:
-    template<typename T, typename Cmd, typename C>
-    static TopicBase* add(const char* name, C /*id*/, const T* data) {
+    template<typename Cmd, typename T>
+    static TopicBase* add(const char* name, const T* data) {
         if (topics_.find(name) != topics_.end()) return nullptr;
-        auto* t = new Topic<T, Cmd>(name, data);
+        auto* t = new Topic<Cmd, T>(name, data);
         topics_[name] = t;
         return t;
     }
