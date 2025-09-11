@@ -4,6 +4,8 @@
 #include <string>
 #include <cstdint>
 #include <mutex>
+#include <limits>
+#include <functional>   // <-- add
 #include "RtosMsgBuffer.hpp"
 #include "QMsg.hpp"
 
@@ -46,25 +48,35 @@ template <typename PayloadType>
 class Topic : public TopicBase
 {
 public:
-    Topic(const char *name, const PayloadType *dataPtr)
-        : TopicBase(name), data_(dataPtr) {}
-
-    const PayloadType *getData() const { return data_; }
+    Topic(const char *name)
+        : TopicBase(name) {}
 
     bool notify() override
     {
-        if (!data_)
-            return false;
         for (auto &s : this->subscribers_)
         {
-            QMsg<uint32_t, PayloadType> msg(static_cast<uint32_t>(s.id), *data_);
+            msg.cmd = s.id;
             s.q->send(&msg, msg.size());
         }
         return true;
     }
 
+    void setWriteHandler(uint32_t writeCmd,
+                         std::function<bool(const PayloadType &)> cb)
+    {
+        writeCmd_ = writeCmd;
+        writeCallback_ = std::move(cb);
+    }
+
+    bool requestWrite(const PayloadType &value)
+    {
+        if (!writeCallback_)
+            return false; // writes not supported for this topic
+        return writeCallback_(value);
+    }
+    QMsg<uint32_t, PayloadType> msg;
+
 private:
-    const PayloadType *data_;
     uint32_t writeCmd_{std::numeric_limits<uint32_t>::max()};
     std::function<bool(const PayloadType &)> writeCallback_;
 };
@@ -75,9 +87,10 @@ class MsgBus
 {
 public:
     template <typename T>
-    static bool registerTopic(const char *name, Topic<T> *topic)
+    static bool registerTopic(Topic<T> *topic)
     {
-        auto strName = std::string(name);
+        std::lock_guard<std::mutex> lock(mutex_); // <-- add lock for symmetry
+        auto strName = std::string(topic->getName());
         auto it = topics_.find(strName);
         if (it != topics_.end())
             return false;
@@ -108,11 +121,19 @@ public:
         return true;
     }
 
-    static TopicBase *get(const char *name)
+    template <typename T>
+    static bool write(const char *name, const T &value)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = topics_.find(std::string(name));
-        return (it == topics_.end()) ? nullptr : it->second;
+        if (it == topics_.end())
+            return false;
+
+        // dynamic_cast is safe since Topic<T> derives from TopicBase (polymorphic)
+        auto *typed = dynamic_cast<Topic<T> *>(it->second);
+        if (!typed)
+            return false; // type mismatch
+        return typed->requestWrite(value);
     }
 
 private:
