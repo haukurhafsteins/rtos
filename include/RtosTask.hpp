@@ -56,6 +56,8 @@ public:
     // Convenience wrappers
     static void sleep_ms(Millis duration) noexcept { rtos::backend::delay_ms(duration); }
     static void yield() noexcept { rtos::backend::yield(); }
+    /// @brief Get the handle of the currently running task
+    /// @return Handle of the currently running task
     static rtos::backend::TaskHandle current() noexcept { return rtos::backend::current_task(); }
 
 private:
