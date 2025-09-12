@@ -1,13 +1,13 @@
 #pragma once
-#include <map>
-#include <list>
-#include <string>
-#include <cstdint>
-#include <mutex>
-#include <limits>
-#include <functional>   // <-- add
-#include "RtosMsgBuffer.hpp"
 #include "QMsg.hpp"
+#include "RtosMsgBuffer.hpp"
+#include <cstdint>
+#include <functional>
+#include <limits>
+#include <list>
+#include <map>
+#include <mutex>
+#include <string>
 
 //--------------------------------------------
 // Abstract base for all topics
@@ -22,10 +22,12 @@ public:
 
     void addSubscriber(RtosMsgBuffer &q, uint32_t msgId)
     {
+        std::lock_guard<std::mutex> lk(subs_mtx_);
         subscribers_.push_back({&q, msgId});
     }
     void removeSubscriber(RtosMsgBuffer &q)
     {
+        std::lock_guard<std::mutex> lk(subs_mtx_);
         subscribers_.remove_if([q_ptr = &q](const Sub &s)
                                { return s.q == q_ptr; });
     }
@@ -37,6 +39,7 @@ protected:
         uint32_t id;
     };
     std::list<Sub> subscribers_;
+    mutable std::mutex subs_mtx_;
 
 private:
     const char *name_;
@@ -48,11 +51,11 @@ template <typename PayloadType>
 class Topic : public TopicBase
 {
 public:
-    Topic(const char *name)
-        : TopicBase(name) {}
+    Topic(const char *name) : TopicBase(name) {}
 
     bool notify() override
     {
+        std::lock_guard<std::mutex> lk(subs_mtx_);
         for (auto &s : this->subscribers_)
         {
             msg.cmd = s.id;
@@ -61,28 +64,42 @@ public:
         return true;
     }
 
-    void setWriteHandler(uint32_t writeCmd,
-                         std::function<bool(const PayloadType &)> cb)
+    PayloadType &data() { return msg.getData(); }
+    bool publish(const PayloadType &v)
     {
-        writeCmd_ = writeCmd;
+        msg.getData() = v;
+        return notify();
+    }
+
+    void setWriteHandler(std::function<bool(const PayloadType &)> cb)
+    {
         writeCallback_ = std::move(cb);
     }
 
-    bool requestWrite(const PayloadType &value)
+    /// @brief Request a write to the topic. Returns false if writes are not
+    /// supported or if the write callback returns false.
+    /// @note This does NOT notify subscribers. The write callback is responsible
+    /// for calling notify() if needed.
+    bool requestWriteOnly(const PayloadType &value)
     {
         if (!writeCallback_)
             return false; // writes not supported for this topic
         return writeCallback_(value);
     }
-    QMsg<uint32_t, PayloadType> msg;
 
 private:
-    uint32_t writeCmd_{std::numeric_limits<uint32_t>::max()};
+    QMsg<uint32_t, PayloadType> msg;
     std::function<bool(const PayloadType &)> writeCallback_;
 };
 
 //--------------------------------------------
-// Registry: central message bus
+/// @brief Central message bus for topics. Allows topic registration,
+/// subscription, and message publishing. All methods are thread-safe.
+///
+/// Topics are identified by name (string) and must be registered
+/// before they can be used and cannot be unregistered.
+///
+/// Subscriptions are per-topic and per-receiver (RtosMsgBuffer).
 class MsgBus
 {
 public:
@@ -95,19 +112,6 @@ public:
         if (it != topics_.end())
             return false;
         topics_[strName] = topic;
-        return true;
-    }
-    // Removes the topic from the registry but does NOT delete the topic object.
-    // The caller is responsible for managing the lifetime of the topic object.
-    // TODO: Anyone can remove any topic. Maybe restrict this to the owner or
-    // use a registration token returned by registerTopic?
-    static bool remove(const char *name)
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        auto it = topics_.find(std::string(name));
-        if (it == topics_.end())
-            return false;
-        topics_.erase(it);
         return true;
     }
 
@@ -124,16 +128,16 @@ public:
     template <typename T>
     static bool write(const char *name, const T &value)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        auto it = topics_.find(std::string(name));
-        if (it == topics_.end())
-            return false;
-
-        // dynamic_cast is safe since Topic<T> derives from TopicBase (polymorphic)
-        auto *typed = dynamic_cast<Topic<T> *>(it->second);
-        if (!typed)
-            return false; // type mismatch
-        return typed->requestWrite(value);
+        TopicBase *base = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            auto it = topics_.find(std::string(name));
+            if (it == topics_.end())
+                return false;
+            base = it->second; // copy out under lock
+        }
+        auto *typed = dynamic_cast<Topic<T> *>(base);
+        return (!typed) ? false : typed->requestWriteOnly(value);
     }
 
 private:
