@@ -1,6 +1,6 @@
 #pragma once
 #include "QMsg.hpp"
-#include "RtosMsgBuffer.hpp"
+#include "RtosMsgBufferTask.hpp"
 #include <cstdint>
 #include <functional>
 #include <limits>
@@ -29,7 +29,7 @@ public:
     /// @param q Message queue to subscribe.
     /// @param msgId Message ID to subscribe to.
     /// @return True if the subscriber was added, false if it already exists.
-    [[nodiscard]] bool addSubscriber(RtosMsgBuffer &q, uint32_t msgId)
+    [[nodiscard]] bool addSubscriber(IRtosMsgReceiver &q, uint32_t msgId)
     {
         std::lock_guard<std::mutex> lk(subs_mtx_);
         auto it = std::find_if(subscribers_.begin(), subscribers_.end(),
@@ -48,7 +48,7 @@ public:
     /// @param q Message queue to unsubscribe.
     /// @param msgId Message ID to unsubscribe from.
     /// @return True if the subscriber was removed, false if it did not exist.
-    [[nodiscard]] bool removeSubscriber(RtosMsgBuffer &q, uint32_t msgId)
+    [[nodiscard]] bool removeSubscriber(IRtosMsgReceiver &q, uint32_t msgId)
     {
         std::lock_guard<std::mutex> lk(subs_mtx_);
         auto it = std::remove_if(subscribers_.begin(), subscribers_.end(),
@@ -65,7 +65,7 @@ public:
 protected:
     struct Sub
     {
-        RtosMsgBuffer *q;
+        IRtosMsgReceiver *q;
         uint32_t id;
     };
     std::vector<Sub> subscribers_;
@@ -79,7 +79,7 @@ private:
 /// @brief Typed topic: publishes QMsg<PayloadType>
 ///
 /// Access to the topic is exclusive to one thread at a time.
-/// The topic maintains a list of subscribers (RtosMsgBuffer + msgId).
+/// The topic maintains a list of subscribers (IRtosMsgReceiver + msgId).
 template <typename PayloadType>
 class Topic : public TopicBase
 {
@@ -144,7 +144,7 @@ private:
 ///
 /// Registered topics can never be deleted.
 ///
-/// Subscriptions are per-topic and per-receiver (RtosMsgBuffer).
+/// Subscriptions are per-topic and per-receiver (IRtosMsgReceiver).
 class MsgBus
 {
 public:
@@ -172,7 +172,7 @@ public:
     /// @return True if subscription was successful, false otherwise.
     /// @note Before a subscriber is deleted, it must unsubscribe from all topics.
     /// Otherwise, the MsgBus will hold a dangling pointer.
-    [[nodiscard]] static bool subscribe(const char *name, RtosMsgBuffer &receiver, uint32_t msgId)
+    [[nodiscard]] static bool subscribe(const char *name, IRtosMsgReceiver &receiver, uint32_t msgId)
     {
         TopicBase *topic = nullptr;
         {
@@ -190,7 +190,7 @@ public:
     /// @param receiver Receiver message buffer
     /// @param msgId Message ID
     /// @return True if unsubscription was successful, false otherwise.
-    [[nodiscard]] static bool unsubscribe(const char *name, RtosMsgBuffer &receiver, uint32_t msgId)
+    [[nodiscard]] static bool unsubscribe(const char *name, IRtosMsgReceiver &receiver, uint32_t msgId)
     {
         TopicBase *topic = nullptr;
         {
