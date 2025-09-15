@@ -32,6 +32,7 @@ public:
     void start() { _task.start(); }
     void receiveTimeout(Millis timeoutMs) { _receiveTimeoutMs = timeoutMs; }
     void sendTimeout(Millis timeoutMs) { _sendTimeoutMs = timeoutMs; }
+    IRtosMsgReceiver &getMsgReceiver() { return *this; }
 
 protected:
     bool send(const void *data, size_t len) { return _msgQueue.send(data, len, _sendTimeoutMs); }
