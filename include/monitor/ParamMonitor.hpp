@@ -1,9 +1,13 @@
 #pragma once
 
+#include <string>
+#include <string_view>
 #include "MinMaxAvg.hpp"
-#include "envelope/envelope.hpp"
 #include "MsgBus.hpp"
+#include "envelope/envelope.hpp"
+#include "monitor/ParamConfig.hpp"
 
+using namespace std;
 using Seconds = envelope::SecondsTime;
 using Millis = rtos::time::Millis;
 
@@ -27,15 +31,16 @@ public:
     /// - <name>.value: publishes the latest value (float)
     /// - <name>.stats: publishes MinMaxAvg stats every window
     /// - <name>.violation: publishes envelope violation events
-    ParamMonitor(const char *name) : topic_value(name), topic_stats(name), topic_violation(name),
-                                     minMaxAvg_(DEFAULT_WINDOW)
+    ParamMonitor(const string_view name, ParamConfig &paramCfg) : _topic_value(name), _topic_stats(name), _topic_violation(name),
+                                                                   _minMaxAvg(DEFAULT_WINDOW)
     {
-        std::string topicValueName = std::string(name) + ".value";
-        std::string topicStatsName = std::string(name) + ".stats";
-        std::string topicViolationName = std::string(name) + ".violation";
-        MsgBus::registerTopic<T>(&topic_value);
-        MsgBus::registerTopic<StatsT>(&topic_stats);
-        MsgBus::registerTopic<envelope::Result>(&topic_violation);
+        string topicValueName = string(name) + ".value";
+        string topicStatsName = string(name) + ".stats";
+        string topicViolationName = string(name) + ".violation";
+        MsgBus::registerTopic<T>(&_topic_value);
+        MsgBus::registerTopic<StatsT>(&_topic_stats);
+        MsgBus::registerTopic<envelope::Result>(&_topic_violation);
+        // addEnvelopeRule(paramCfg->getRules(name));
     };
     ~ParamMonitor() = default;
 
@@ -52,24 +57,24 @@ public:
     /// <name>.violation topic.
     [[nodiscard]] envelope::Result update(float value, Millis now)
     {
-        topic_value.data() = value;
-        topic_value.notify();
-        if (minMaxAvg_.add(value, now))
+        _topic_value.data() = value;
+        _topic_value.notify();
+        if (_minMaxAvg.add(value, now))
         {
             StatsT stats;
-            if (minMaxAvg_.getRange(stats))
+            if (_minMaxAvg.getRange(stats))
             {
-                topic_stats.data() = stats;
-                topic_stats.notify();
+                _topic_stats.data() = stats;
+                _topic_stats.notify();
             }
-            minMaxAvg_.reset();
+            _minMaxAvg.reset();
         }
-        envelope::Result envState = env.update(value, now.count() / 1000.0f);
-        if (envState.state != lastState_.state)
+        envelope::Result envState = _env.update(value, now.count() / 1000.0f);
+        if (envState.state != _lastState.state)
         {
-            topic_violation.data() = envState;
-            topic_violation.notify();
-            lastState_ = envState;
+            _topic_violation.data() = envState;
+            _topic_violation.notify();
+            _lastState = envState;
         }
         return envState;
     }
@@ -89,8 +94,8 @@ public:
     template <class Rule>
     void addEnvelopeRule(const Rule &r)
     {
-        if (next < MAX_RULES)
-            env.bind(next++, r);
+        if (_next < MAX_RULES)
+            _env.bind(_next++, r);
     }
 
     // Get the rule that caused the last violation, or nullptr if none
@@ -99,22 +104,22 @@ public:
     {
         if (res.state == envelope::State::Violation && res.index < MAX_RULES)
         {
-            return static_cast<const Rule *>(env.rules[res.index]);
+            return static_cast<const Rule *>(_env.rules[res.index]);
         }
         return nullptr;
     }
 
-    const MinMaxAvg<T> &getStats() const { return minMaxAvg_; }
-    void resetStats() { minMaxAvg_.reset(); }
+    const MinMaxAvg<T> &getStats() const { return _minMaxAvg; }
+    void resetStats() { _minMaxAvg.reset(); }
 
 private:
-    Topic<T> topic_value;
-    Topic<StatsT> topic_stats;
-    Topic<envelope::Result> topic_violation;
+    Topic<T> _topic_value;
+    Topic<StatsT> _topic_stats;
+    Topic<envelope::Result> _topic_violation;
 
-    MinMaxAvgWindowed<T> minMaxAvg_;
-    std::size_t next;
-    envelope::Result lastState_{envelope::State::Normal, envelope::Result::NO_VIOLATION};
+    MinMaxAvgWindowed<T> _minMaxAvg;
+    size_t _next;
+    envelope::Result _lastState{envelope::State::Normal, envelope::Result::NO_VIOLATION};
 
-    envelope::Envelope<T, MAX_RULES, Seconds> env{};
+    envelope::Envelope<T, MAX_RULES, Seconds> _env{};
 };

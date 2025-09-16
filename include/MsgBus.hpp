@@ -21,7 +21,7 @@ using namespace std;
 class TopicBase
 {
 public:
-    explicit TopicBase(const string_view &n) : name_(n) {}
+    explicit TopicBase(const string_view n) : name_(n) {}
     virtual ~TopicBase() = default;
 
     string_view getName() const { return name_; }
@@ -91,7 +91,7 @@ public:
     /// @brief Construct a new Topic
     /// @param name Topic name (must be unique and a literal string)
     /// @param cb Optional write callback
-    Topic(const string_view &name, WriteCb cb = nullptr) : TopicBase(name), writeCallback_(std::move(cb)) {}
+    Topic(const string_view name, WriteCb cb = nullptr) : TopicBase(name), writeCallback_(std::move(cb)) {}
 
     /// @brief Notify all subscribers of a new message. Can only be called
     /// from the thread that owns the topic.
