@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <array>
 #include <functional>
 #include "ParamMonitor.hpp"
 #include "FixedUnorderedMap.hpp"
@@ -11,7 +12,7 @@ public:
     ParamMonitorPool() = default;
     ~ParamMonitorPool() = default;
 
-    void registerMonitor(ParamMonitor* monitor)
+    void registerMonitor(ParamMonitor<float>* monitor)
     {
         for (size_t i = 0; i < MAX_MONITORS; ++i)
         {
@@ -24,5 +25,5 @@ public:
     }
 
 private:
-    std::array<ParamMonitor*, MAX_MONITORS> monitorsArray_;
+    std::array<ParamMonitor<float>*, MAX_MONITORS> monitorsArray_;
 };
