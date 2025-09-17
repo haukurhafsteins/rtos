@@ -7,6 +7,7 @@ using TaskFunction = void (*)(void *);
 using Millis = rtos::time::Millis;
 namespace rtos::backend
 {
+    // clang-format off
 
     // ========= Common =========
     inline constexpr Millis RTOS_WAIT_FOREVER = Millis::max();
@@ -43,4 +44,5 @@ namespace rtos::backend
     std::size_t msgbuf_space_available(MsgBufferHandle handle) noexcept;
     bool msgbuf_reset(MsgBufferHandle handle) noexcept;
 
+    // clang-format on
 } // namespace rtos::backend
