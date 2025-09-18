@@ -6,6 +6,9 @@
 #include "topics.hpp"
 #include "config/JsonCodec.hpp"
 #include "config/Result.hpp"
+#include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
 
 class ParamConfigJsonCodec : public rtos::config::JsonCodec<ParamConfig>
 {
@@ -27,11 +30,27 @@ class ParamConfig
 public:
     ParamConfig(std::string_view cfgFile = "/cfg/paramConfig.json")
     {
+        // Open the file, create if missing
+        std::ifstream file(cfgFile.data());
+        if (!file) {
+            // File doesn't exist, create a new one
+            std::ofstream newFile(cfgFile.data());
+            newFile << "{}";  // Write an empty JSON object
+            newFile.close();
+        }
+        else {
+            // File exists, read the contents
+            std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            file.close();
+            
+            // Choose a codec
+            auto codec = std::make_unique<ParamConfigJsonCodec>();
+            
+
+        }
+
         // Choose a store per target
         auto store = std::make_unique<FsStore>("/spiffs", cfgFile);
-
-        // Choose a codec
-        auto codec = std::make_unique<ParamConfigJsonCodec>();
     }
     ~ParamConfig() = default;
 
