@@ -34,22 +34,7 @@ struct MyClassConfig {
 ```c++
 using namespace rtos::config;
 
-// Storage, codec and the config manager
-auto store = std::make_unique<FsStore>("/spiffs", "myclass.json");
-auto codec = std::make_unique<MyClassJsonCodec>();
-ConfigManager<MyClassConfig> mgr("myclass.json", std::move(store), std::move(codec));
-
-// Observer that gets called with the new config for validation
-struct MqttSubsystem : ConfigObserver<MqttConfig> {
-  bool on_config_apply(const MqttConfig& newCfg) override {
-    return true; // false if cannot apply now
-  }
-} mqtt;
-
-// Add an observer (one or more) to check if everything is OK
-mgr.add_observer(&mqtt);
-
-// The one and only load and verfication of the config
+ConfigManager<MyClassConfig, MyStore, MyCodec> mgr("myclass.json");
 auto res = mgr.load();
 if (!res) {
   // log res.error.where / res.error.msg
