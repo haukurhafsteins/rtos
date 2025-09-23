@@ -140,9 +140,10 @@ protected:
 //   operator()(T value, Time::rep now) -> bool (true == violation)
 // - Bounds policy B selects inclusivity at edges (default: exclusive)
 
-// Violation when value > hi
-// Normal when value <= hi
-
+/// @brief Rule: Violation when value > hi, normal when value <= hi
+/// @tparam T Value type (e.g. float)
+/// @tparam Time Time policy (default: SecondsTime)
+/// @tparam B Bounds policy (default: exclusive)
 template<class T, class Time = SecondsTime, class B = Bounds<false> >
 struct Above : Debounce<Time> {
     T hi{}; // upper bound (max acceptable)
@@ -154,9 +155,10 @@ struct Above : Debounce<Time> {
     }
 };
 
-// Violation when value < lo
-// Normal when value >= lo
-
+/// @brief Rule: Violation when value < lo, normal when value >= lo
+/// @tparam T Value type (e.g. float)
+/// @tparam Time Time policy (default: SecondsTime)
+/// @tparam B Bounds policy (default: exclusive)
 template<class T, class Time = SecondsTime, class B = Bounds<false> >
 struct Below : Debounce<Time> {
     T lo{}; // lower bound (min acceptable)
@@ -166,9 +168,10 @@ struct Below : Debounce<Time> {
     }
 };
 
-// Keep value within [lo, hi]
-// Violation when outside the band
-
+/// @brief Rule: Keep value within [lo, hi], violation when outside the band
+/// @tparam T Value type (e.g. float)
+/// @tparam Time Time policy (default: SecondsTime)
+/// @tparam B Bounds policy (default: exclusive)
 template<class T, class Time = SecondsTime, class B = Bounds<false> >
 struct Within : Debounce<Time> {
     T lo{};
@@ -179,9 +182,10 @@ struct Within : Debounce<Time> {
     }
 };
 
-// Keep value outside [lo, hi] (forbidden band)
-// Violation when inside the band
-
+/// @brief Rule: Keep value outside [lo, hi], violation when inside the band
+/// @tparam T Value type (e.g. float)
+/// @tparam Time Time policy (default: SecondsTime)
+/// @tparam B Bounds policy (default: exclusive)
 template<class T, class Time = SecondsTime, class B = Bounds<false> >
 struct Outside : Debounce<Time> {
     T lo{};
@@ -256,8 +260,11 @@ static bool call_rule(const void* self, const T& v, typename Time::rep now) {
     return (*static_cast<const Rule*>(self))(v, now);
 }
 
-// Envelope holds pointers to rule objects you create elsewhere (no ownership)
-
+/// @brief Envelope aggregator with type-erased rules.
+/// @tparam T Value type (e.g. float)
+/// @tparam N Maximum number of rules
+/// @tparam Time Time policy (default: SecondsTime)
+/// @note Envelope holds pointers to rule objects you create elsewhere (no ownership)
 template<class T, std::size_t N, class Time = SecondsTime>
 struct Envelope {
     static_assert(N > 0, "Envelope must have at least one rule");
