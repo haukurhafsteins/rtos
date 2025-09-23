@@ -11,8 +11,6 @@
 #include <string_view>
 #include <algorithm>
 
-using namespace std;
-
 //--------------------------------------------
 /// @brief Abstract base for all topics
 ///
@@ -21,10 +19,10 @@ using namespace std;
 class TopicBase
 {
 public:
-    explicit TopicBase(const string_view n) : name_(n) {}
+    explicit TopicBase(const std::string_view n) : name_(n) {}
     virtual ~TopicBase() = default;
 
-    string_view getName() const { return name_; }
+    std::string_view getName() const { return name_; }
     [[nodiscard]] virtual size_t notify() = 0;
 
     /// @brief Add a subscriber to the topic.
@@ -33,7 +31,7 @@ public:
     /// @return True if the subscriber was added, false if it already exists.
     [[nodiscard]] bool addSubscriber(IRtosMsgReceiver &q, uint32_t msgId)
     {
-        lock_guard<mutex> lk(subs_mtx_);
+        std::lock_guard<std::mutex> lk(subs_mtx_);
         auto it = find_if(subscribers_.begin(), subscribers_.end(),
                           [&](const Sub &s)
                           { return s.q == &q && s.id == msgId; });
@@ -52,7 +50,7 @@ public:
     /// @return True if the subscriber was removed, false if it did not exist.
     [[nodiscard]] bool removeSubscriber(IRtosMsgReceiver &q, uint32_t msgId)
     {
-        lock_guard<mutex> lk(subs_mtx_);
+        std::lock_guard<std::mutex> lk(subs_mtx_);
         auto it = remove_if(subscribers_.begin(), subscribers_.end(),
                             [&](const Sub &s)
                             { return s.q == &q && s.id == msgId; });
@@ -70,11 +68,11 @@ protected:
         IRtosMsgReceiver *q;
         uint32_t id;
     };
-    vector<Sub> subscribers_;
-    mutable mutex subs_mtx_;
+    std::vector<Sub> subscribers_;
+    mutable std::mutex subs_mtx_;
 
 private:
-    const string_view name_;
+    const std::string_view name_;
 };
 
 //--------------------------------------------
@@ -85,22 +83,22 @@ private:
 template <typename PayloadType>
 class Topic : public TopicBase
 {
-    using WriteCb = function<bool(const PayloadType &)>;
+    using WriteCb = std::function<bool(const PayloadType &)>;
 
 public:
     /// @brief Construct a new Topic
     /// @param name Topic name (must be unique and a literal string)
     /// @param cb Optional write callback
-    Topic(const string_view name, WriteCb cb = nullptr) : TopicBase(name), writeCallback_(std::move(cb)) {}
+    Topic(const std::string_view name, WriteCb cb = nullptr) : TopicBase(name), writeCallback_(std::move(cb)) {}
 
     /// @brief Notify all subscribers of a new message. Can only be called
     /// from the thread that owns the topic.
     /// @return Number of errors encountered during notification, one per failed subscriber.
     size_t notify() override
     {
-        vector<Sub> subs_copy;
+        std::vector<Sub> subs_copy;
         {
-            lock_guard<mutex> lk(subs_mtx_);
+            std::lock_guard<std::mutex> lk(subs_mtx_);
             subs_copy = subscribers_; // vector copy
         }
         size_t errors = 0;
@@ -161,9 +159,9 @@ public:
     {
         if (!topic)
             return false;
-        lock_guard<mutex> lock(mutex_);
-        auto name = string(topic->getName());
-        auto [it, inserted] = topics_.emplace(move(name), topic);
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto name = std::string(topic->getName());
+        auto [it, inserted] = topics_.emplace(std::move(name), topic);
         return inserted;
     }
 
@@ -178,7 +176,7 @@ public:
     {
         TopicBase *topic = nullptr;
         {
-            lock_guard<mutex> lock(mutex_);
+            std::lock_guard<std::mutex> lock(mutex_);
             auto it = topics_.find(name);
             if (it == topics_.end())
                 return false;
@@ -196,7 +194,7 @@ public:
     {
         TopicBase *topic = nullptr;
         {
-            lock_guard<mutex> lock(mutex_);
+            std::lock_guard<std::mutex> lock(mutex_);
             auto it = topics_.find(name);
             if (it == topics_.end())
                 return false;
@@ -218,7 +216,7 @@ public:
     {
         TopicBase *base = nullptr;
         {
-            lock_guard<mutex> lock(mutex_);
+            std::lock_guard<std::mutex> lock(mutex_);
             auto it = topics_.find(name);
             if (it == topics_.end())
                 return false;
@@ -229,6 +227,6 @@ public:
     }
 
 private:
-    inline static map<string, TopicBase *> topics_{}; // or unordered_map
-    inline static mutex mutex_;
+    inline static std::map<std::string, TopicBase *> topics_{}; // or unordered_map
+    inline static std::mutex mutex_;
 };
