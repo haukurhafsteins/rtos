@@ -96,6 +96,10 @@ public:
     /// @return Number of errors encountered during notification, one per failed subscriber.
     size_t notify() override
     {
+        if (subscribers_.size() == 0)
+        {
+            return 0;
+        }
         std::vector<Sub> subs_copy;
         {
             std::lock_guard<std::mutex> lk(subs_mtx_);
