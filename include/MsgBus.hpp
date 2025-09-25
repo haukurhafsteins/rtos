@@ -172,12 +172,12 @@ public:
     /// @return True if subscription was successful, false otherwise.
     /// @note Before a subscriber is deleted, it must unsubscribe from all topics.
     /// Otherwise, the MsgBus will hold a dangling pointer.
-    [[nodiscard]] static bool subscribe(const char *name, IRtosMsgReceiver &receiver, uint32_t msgId)
+    [[nodiscard]] static bool subscribe(const std::string_view name, IRtosMsgReceiver &receiver, uint32_t msgId)
     {
         TopicBase *topic = nullptr;
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            auto it = topics_.find(name);
+            auto it = topics_.find(name.data());
             if (it == topics_.end())
                 return false;
             topic = it->second; // safe: topics are never unregistered
@@ -190,12 +190,12 @@ public:
     /// @param receiver Receiver message buffer
     /// @param msgId Message ID
     /// @return True if unsubscription was successful, false otherwise.
-    [[nodiscard]] static bool unsubscribe(const char *name, IRtosMsgReceiver &receiver, uint32_t msgId)
+    [[nodiscard]] static bool unsubscribe(const std::string_view name, IRtosMsgReceiver &receiver, uint32_t msgId)
     {
         TopicBase *topic = nullptr;
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            auto it = topics_.find(name);
+            auto it = topics_.find(name.data());
             if (it == topics_.end())
                 return false;
             topic = it->second; // safe: topics are never unregistered
@@ -212,12 +212,12 @@ public:
     ///  @note This does NOT notify subscribers. The owner of the topic will
     /// need to call notify() after validating and applying the write.
     template <typename T>
-    [[nodiscard]] static bool requestWrite(const char *name, const T &value)
+    [[nodiscard]] static bool requestWrite(const std::string_view name, const T &value)
     {
         TopicBase *base = nullptr;
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            auto it = topics_.find(name);
+            auto it = topics_.find(name.data());
             if (it == topics_.end())
                 return false;
             base = it->second;
