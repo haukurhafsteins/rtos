@@ -36,6 +36,7 @@ public:
 
 protected:
     bool send(const void *data, size_t len) { return _msgQueue.send(data, len, _sendTimeoutMs); }
+    virtual void taskEntry() {}
     virtual void handleMessage(const void *data, size_t len) = 0;
     virtual void handleTimeout() {}
     virtual void handleTimeoutError() {}
@@ -46,6 +47,7 @@ private:
     void taskLoop()
     {
         Millis timeoutTimeMs = _receiveTimeoutMs;
+        taskEntry();
         while (true)
         {
             if (_receiveTimeoutMs == RTOS_TASK_WAIT_FOREVER)
