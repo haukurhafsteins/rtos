@@ -1,4 +1,5 @@
 #pragma once
+#include <typeindex>
 #include "QMsg.hpp"
 #include "RtosMsgBufferTask.hpp"
 #include <cstdint>
@@ -152,6 +153,18 @@ private:
 class MsgBus
 {
 public:
+    enum class Result
+    {
+        OK = 0,
+        ZERO_TOPIC,
+        TOPIC_EXISTS,
+        TOPIC_NOT_FOUND,
+        TYPE_MISMATCH,
+        SUB_EXISTS,
+        SUB_NOT_FOUND,
+        WRITE_NOT_SUPPORTED,
+        WRITE_FAILED
+    };
     /// @brief Register a topic with the message bus.
     /// @tparam T Payload type
     /// @param topic Pointer to the topic to register. Must not be null.
@@ -159,14 +172,14 @@ public:
     /// the same name already exists.
     /// @note The topic must remain valid for the lifetime of the MsgBus.
     template <typename T>
-    [[nodiscard]] static bool registerTopic(Topic<T> *topic)
+    [[nodiscard]] static Result registerTopic(Topic<T> *topic)
     {
         if (!topic)
-            return false;
+            return Result::ZERO_TOPIC;
         std::lock_guard<std::mutex> lock(mutex_);
         auto name = std::string(topic->getName());
         auto [it, inserted] = topics_.emplace(std::move(name), topic);
-        return inserted;
+        return inserted ? Result::OK : Result::TOPIC_EXISTS;
     }
 
     /// @brief Subscribe a receiver to a topic.
@@ -176,17 +189,17 @@ public:
     /// @return True if subscription was successful, false otherwise.
     /// @note Before a subscriber is deleted, it must unsubscribe from all topics.
     /// Otherwise, the MsgBus will hold a dangling pointer.
-    [[nodiscard]] static bool subscribe(const std::string_view name, IRtosMsgReceiver &receiver, uint32_t msgId)
+    [[nodiscard]] static Result subscribe(const std::string_view name, IRtosMsgReceiver &receiver, uint32_t msgId)
     {
         TopicBase *topic = nullptr;
         {
             std::lock_guard<std::mutex> lock(mutex_);
             auto it = topics_.find(name.data());
             if (it == topics_.end())
-                return false;
+                return Result::TOPIC_NOT_FOUND;
             topic = it->second; // safe: topics are never unregistered
         }
-        return topic->addSubscriber(receiver, msgId); // no bus lock held here
+        return topic->addSubscriber(receiver, msgId) ? Result::OK : Result::SUB_EXISTS;
     }
 
     /// @brief Unsubscribe a receiver from a topic.
@@ -194,17 +207,17 @@ public:
     /// @param receiver Receiver message buffer
     /// @param msgId Message ID
     /// @return True if unsubscription was successful, false otherwise.
-    [[nodiscard]] static bool unsubscribe(const std::string_view name, IRtosMsgReceiver &receiver, uint32_t msgId)
+    [[nodiscard]] static Result unsubscribe(const std::string_view name, IRtosMsgReceiver &receiver, uint32_t msgId)
     {
         TopicBase *topic = nullptr;
         {
             std::lock_guard<std::mutex> lock(mutex_);
             auto it = topics_.find(name.data());
             if (it == topics_.end())
-                return false;
+                return Result::TOPIC_NOT_FOUND;
             topic = it->second; // safe: topics are never unregistered
         }
-        return topic->removeSubscriber(receiver, msgId); // no bus lock held here
+        return topic->removeSubscriber(receiver, msgId) ? Result::OK : Result::SUB_NOT_FOUND;
     }
 
     /// @brief Write a value to a topic. The topic must support writes
@@ -216,18 +229,45 @@ public:
     ///  @note This does NOT notify subscribers. The owner of the topic will
     /// need to call notify() after validating and applying the write.
     template <typename T>
-    [[nodiscard]] static bool requestWrite(const std::string_view name, const T &value)
+    [[nodiscard]] static Result requestWrite(const std::string_view name, const T &value)
     {
         TopicBase *base = nullptr;
         {
             std::lock_guard<std::mutex> lock(mutex_);
             auto it = topics_.find(name.data());
             if (it == topics_.end())
-                return false;
+                return Result::TOPIC_NOT_FOUND;
             base = it->second;
         }
         auto *typed = dynamic_cast<Topic<T> *>(base);
-        return typed ? typed->requestWrite(value) : false;
+        return typed ? typed->requestWrite(value) : Result::TYPE_MISMATCH;
+    }
+
+    std::string_view resultToString(Result r)
+    {
+        switch (r)
+        {
+        case Result::OK:
+            return "OK";
+        case Result::ZERO_TOPIC:
+            return "ZERO_TOPIC";
+        case Result::TOPIC_EXISTS:
+            return "TOPIC_EXISTS";
+        case Result::TOPIC_NOT_FOUND:
+            return "TOPIC_NOT_FOUND";
+        case Result::TYPE_MISMATCH:
+            return "TYPE_MISMATCH";
+        case Result::SUB_EXISTS:
+            return "SUB_EXISTS";
+        case Result::SUB_NOT_FOUND:
+            return "SUB_NOT_FOUND";
+        case Result::WRITE_NOT_SUPPORTED:
+            return "WRITE_NOT_SUPPORTED";
+        case Result::WRITE_FAILED:
+            return "WRITE_FAILED";
+        default:
+            return "UNKNOWN";
+        }
     }
 
 private:
