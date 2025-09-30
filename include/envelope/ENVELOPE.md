@@ -1,6 +1,6 @@
 # envelope.hpp — Minimal embedded “envelope/limits” library
 
-Header-only C++14 library for validating values (scalars or arrays) against declarative limits with debounced state and fixed, priority-ordered rules.
+Header-only C++14 library for **validating values** (scalars or arrays) **against** declarative limits with debounced state and fixed, priority-ordered **rules**. A [rule](#21-rules) always defines **violation** limits.
 
 * **Zero-alloc** (no `new`/`delete`), **no exceptions/RTTI**.
 * **Per-rule timers** for enter/exit delays (debounce, linger).
