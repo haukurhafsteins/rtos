@@ -57,10 +57,6 @@ protected:
 MyTask::MyTask(const char *name, size_t stackSize, int priority, size_t qByteSize)
     : RtosMsgBufferTask(name, stackSize, priority, qByteSize)
 {
-    ...
-    // To activate the timeout function call this with the apropriate timeout.
-    // Use RTOS_TASK_WAIT_FOREVER to trigger waiting forever.
-    // receiveTimeout(100); // 100 ms timout.
 }
 
 //---------------------------------------------------------------------------
@@ -72,20 +68,24 @@ void MyTask::handleMessage(const void *data, size_t len)
     switch (msg->cmd)
     {
     case MyCmd::Msg1:
-        ...
+        // ...
         break;
     case MyCmd::Msg2:
     {
         QMsg<MyCmd, MyMsg2> *msg = (QMsg<MyCmd, MyMsg2> *)data;
         auto val = msg->getData();
-        ...
+        // ...
         break;
+    }
     }
 }
 
 void MyTask::handleTimeout()
 {
-    ...
+    // ...
+    // To activate the timeout, call receiveTimeout(timeout).
+    // Example: receiveTimeout(static_cast<Millis>(100));
+    // Use RTOS_TASK_WAIT_FOREVER to trigger waiting forever (default).
 }
 
 //---------------------------------------------------------------------------
