@@ -182,6 +182,12 @@ public:
         return inserted ? Result::OK : Result::TOPIC_EXISTS;
     }
 
+    bool topicExists(const std::string_view name)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return topics_.find(name.data()) != topics_.end();
+    }
+
     /// @brief Subscribe a receiver to a topic.
     /// @param name Topic name
     /// @param receiver Receiver message buffer
@@ -189,7 +195,7 @@ public:
     /// @return True if subscription was successful, false otherwise.
     /// @note Before a subscriber is deleted, it must unsubscribe from all topics.
     /// Otherwise, the MsgBus will hold a dangling pointer.
-    [[nodiscard]] static Result subscribe(const std::string_view name, IRtosMsgReceiver &receiver, uint32_t msgId)
+    static Result subscribe(const std::string_view name, IRtosMsgReceiver &receiver, uint32_t msgId)
     {
         TopicBase *topic = nullptr;
         {
