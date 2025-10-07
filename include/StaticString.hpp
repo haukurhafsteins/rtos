@@ -62,7 +62,7 @@ public:
     const char   &operator[](std::size_t i) const { return buffer[i]; }
     // clang-format on
 private:
-    char buffer[N];
-    std::size_t len;
     constexpr static const std::string_view TAG = "StaticString";
+    char buffer[N]{};
+    std::size_t len;
 };
