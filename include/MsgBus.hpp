@@ -11,8 +11,18 @@
 #include <string>
 #include <string_view>
 #include <algorithm>
+#include <typeinfo>
 
-//--------------------------------------------
+// As RTTI is disabled, we need our own type identification mechanism.
+using TypeId = const void*;
+template <typename T>
+constexpr TypeId getTypeId() {
+    // One unique address per distinct T.
+    static const int token = 0;
+    return &token;
+}
+
+//-----------------------------------------------------------------------------
 /// @brief Abstract base for all topics
 ///
 /// The name_ member must be a string literal and is immutable 
@@ -24,6 +34,7 @@ public:
     virtual ~TopicBase() = default;
 
     std::string_view getName() const { return name_; }
+    virtual TypeId typeId() const = 0;
     [[nodiscard]] virtual size_t notify() = 0;
 
     /// @brief Add a subscriber to the topic.
@@ -76,7 +87,7 @@ private:
     const std::string_view name_;
 };
 
-//--------------------------------------------
+//-------------------------------------------------------------
 /// @brief Typed topic: publishes QMsg<PayloadType>
 ///
 /// Access to the topic is exclusive to one thread at a time.
@@ -85,12 +96,14 @@ template <typename PayloadType>
 class Topic : public TopicBase
 {
     using WriteCb = std::function<bool(const PayloadType &)>;
+    using FromJson = std::function<bool(const std::string_view &, PayloadType &)>;
+    using ToJson = std::function<bool(const PayloadType &, std::string &)>;
 
 public:
     /// @brief Construct a new Topic
     /// @param name Topic name (must be unique and a literal string)
     /// @param cb Optional write callback
-    Topic(const std::string_view name, WriteCb cb = nullptr) : TopicBase(name), writeCallback_(std::move(cb)) {}
+    Topic(const std::string_view name, WriteCb cb = nullptr) : TopicBase(name), _writeCb(std::move(cb)) {}
 
     /// @brief Notify all subscribers of a new message. Can only be called
     /// from the thread that owns the topic.
@@ -129,17 +142,40 @@ public:
     /// @note Callbacks must be non-throwing.
     bool requestWrite(const PayloadType &value)
     {
-        if (!writeCallback_)
+        if (!_writeCb)
             return false; // writes not supported for this topic
-        return writeCallback_(value);
+        return _writeCb(value);
     }
+
+    bool requestWrite(const std::string_view &json)
+    {
+        if (!_fromJsonCb)
+            return false; // writes not supported for this topic
+        PayloadType value;
+        if (!_fromJsonCb(json, value))
+            return false;
+        return _writeCb ? _writeCb(value) : false;
+    }
+
+    /// @brief Set the parse callback for converting json string to payload.
+    /// @param cb Write callback that returns true if parsing was successful.
+    /// @note Callbacks must be non-throwing.
+    void setFromJsonCb(FromJson cb) { _fromJsonCb = std::move(cb); }
+    /// @brief Set the to-json callback for converting payload to json string.
+    /// @param cb Write callback that returns true if conversion was successful.
+    /// @note Callbacks must be non-throwing.
+    void setToJsonCb(ToJson cb) { _toJsonCb = std::move(cb); }
+
+    TypeId typeId() const override { return getTypeId<PayloadType>(); }
 
 private:
     QMsg<uint32_t, PayloadType> msg;
-    WriteCb writeCallback_;
+    WriteCb _writeCb = nullptr;
+    FromJson _fromJsonCb = nullptr;
+    ToJson _toJsonCb = nullptr;
 };
 
-//--------------------------------------------
+//-----------------------------------------------------------------------------
 /// @brief Central message bus for topics. Allows topic registration,
 /// subscription, and message publishing. All methods are thread-safe.
 /// It is intended for embedded systems with limited resources.
@@ -182,7 +218,7 @@ public:
         return inserted ? Result::OK : Result::TOPIC_EXISTS;
     }
 
-    bool topicExists(const std::string_view name)
+    static bool topicExists(const std::string_view name)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         return topics_.find(name.data()) != topics_.end();
@@ -213,7 +249,7 @@ public:
     /// @param receiver Receiver message buffer
     /// @param msgId Message ID
     /// @return True if unsubscription was successful, false otherwise.
-    [[nodiscard]] static Result unsubscribe(const std::string_view name, IRtosMsgReceiver &receiver, uint32_t msgId)
+    static Result unsubscribe(const std::string_view name, IRtosMsgReceiver &receiver, uint32_t msgId)
     {
         TopicBase *topic = nullptr;
         {
@@ -245,8 +281,11 @@ public:
                 return Result::TOPIC_NOT_FOUND;
             base = it->second;
         }
-        auto *typed = dynamic_cast<Topic<T> *>(base);
-        return typed ? typed->requestWrite(value) : Result::TYPE_MISMATCH;
+        if (base->typeId() == getTypeId<T>())
+        {
+            return static_cast<Topic<T> *>(base)->requestWrite(value) ? Result::OK : Result::WRITE_FAILED;
+        }
+        return Result::TYPE_MISMATCH;
     }
 
     std::string_view resultToString(Result r)
