@@ -25,16 +25,17 @@ constexpr TypeId getTypeId() {
 //-----------------------------------------------------------------------------
 /// @brief Abstract base for all topics
 ///
-/// The name_ member must be a string literal and is immutable 
+/// The _name member must be a string literal and is immutable 
 /// after construction.
 class TopicBase
 {
 public:
-    explicit TopicBase(const std::string_view n) : name_(n) {}
+    explicit TopicBase(const std::string_view n) : _name(n) {}
     virtual ~TopicBase() = default;
 
-    std::string_view getName() const { return name_; }
+    std::string_view getName() const { return _name; }
     virtual TypeId typeId() const = 0;
+    virtual bool toJson(char *buf, size_t &len) const = 0;
     [[nodiscard]] virtual size_t notify() = 0;
 
     /// @brief Add a subscriber to the topic.
@@ -82,9 +83,7 @@ protected:
     };
     std::vector<Sub> subscribers_;
     mutable std::mutex subs_mtx_;
-
-private:
-    const std::string_view name_;
+    const std::string_view _name;
 };
 
 //-------------------------------------------------------------
@@ -97,13 +96,15 @@ class Topic : public TopicBase
 {
     using WriteCb = std::function<bool(const PayloadType &)>;
     using FromJson = std::function<bool(const std::string_view &, PayloadType &)>;
-    using ToJson = std::function<bool(const PayloadType &, std::string &)>;
+    using ToJson = std::function<bool(const std::string_view &, const PayloadType &, char *, size_t &)>;
 
 public:
     /// @brief Construct a new Topic
     /// @param name Topic name (must be unique and a literal string)
     /// @param cb Optional write callback
-    Topic(const std::string_view name, WriteCb cb = nullptr) : TopicBase(name), _writeCb(std::move(cb)) {}
+    Topic(const std::string_view name, WriteCb cb = nullptr) : TopicBase(name), _writeCb(std::move(cb)), _fromJsonCb(nullptr) {
+        
+    }
 
     /// @brief Notify all subscribers of a new message. Can only be called
     /// from the thread that owns the topic.
@@ -168,11 +169,59 @@ public:
 
     TypeId typeId() const override { return getTypeId<PayloadType>(); }
 
+    bool toJson(char *buffer, size_t &size) const override
+    {
+        if (!_toJsonCb)
+            return false;
+        return _toJsonCb(_name, msg.data, buffer, size);
+    }
+
+    void setToJsonCb()
+    {
+        switch (typeId())
+        {
+        case getTypeId<bool>():
+            _toJsonCb = toJsonBool;
+            break;
+        case getTypeId<int>():
+            _toJsonCb = toJsonInt;
+            break;
+        case getTypeId<float>():
+            _toJsonCb = toJsonFloat;
+            break;
+        }
+    }
+
+    static bool toJsonFloat(const std::string_view &name,const float &data, char *buf, size_t &len)
+    {
+        int written = snprintf(buf, len, "{\"%s\":%f}", name.data(), static_cast<float>(data));
+        if (written < 0 || static_cast<size_t>(written) >= len)
+            return false;
+        len = static_cast<size_t>(written);
+        return true;
+    }
+    static bool toJsonInt(const std::string_view &name,const int &data, char *buf, size_t &len)
+    {
+        int written = snprintf(buf, len, "{\"%s\":%d}", name.data(), static_cast<int>(data));
+        if (written < 0 || static_cast<size_t>(written) >= len)
+            return false;
+        len = static_cast<size_t>(written);
+        return true;
+    }
+    static bool toJsonBool(const std::string_view &name,const bool &data, char *buf, size_t &len)
+    {
+        int written = snprintf(buf, len, "{\"%s\":%s}", name.data(), data ? "true" : "false");
+        if (written < 0 || static_cast<size_t>(written) >= len)
+            return false;
+        len = static_cast<size_t>(written);
+        return true;
+    }
+
 private:
     QMsg<uint32_t, PayloadType> msg;
-    WriteCb _writeCb = nullptr;
-    FromJson _fromJsonCb = nullptr;
-    ToJson _toJsonCb = nullptr;
+    WriteCb _writeCb;
+    ToJson _toJsonCb;
+    FromJson _fromJsonCb;
 };
 
 //-----------------------------------------------------------------------------
@@ -199,7 +248,8 @@ public:
         SUB_EXISTS,
         SUB_NOT_FOUND,
         WRITE_NOT_SUPPORTED,
-        WRITE_FAILED
+        WRITE_FAILED,
+        JSON_PARSE_FAILED
     };
     /// @brief Register a topic with the message bus.
     /// @tparam T Payload type
@@ -287,6 +337,27 @@ public:
         }
         return Result::TYPE_MISMATCH;
     }
+
+    /// @brief Get a JSON representation of the topic's payload.
+    /// @param name Topic name
+    /// @param json Buffer to write JSON string to.
+    /// @param len On input, size of the buffer. On output, number of bytes
+    /// @return True if conversion was successful, false otherwise.
+    static Result toJson(const std::string_view name, char *json, size_t &len)
+    {
+        TopicBase *base = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            auto it = topics_.find(name.data());
+            if (it == topics_.end())
+                return Result::TOPIC_NOT_FOUND;
+            base = it->second;
+        }
+        if (base->toJson(json, len))
+            return Result::OK;
+        return Result::JSON_PARSE_FAILED;
+    }
+    
 
     std::string_view resultToString(Result r)
     {
