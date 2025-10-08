@@ -35,7 +35,15 @@ public:
     IRtosMsgReceiver &getMsgReceiver() { return *this; }
 
 protected:
-    bool send(const void *data, size_t len) { return _msgQueue.send(data, len, _sendTimeoutMs); }
+    bool send(const void *data, size_t len) 
+    {
+        if (len > MaxMsgSize) 
+        {
+            printf("ERROR: RtosMsgBufferTask::send: message size %zu exceeds max %zu\n", len, MaxMsgSize);
+            return false;
+        }
+        return _msgQueue.send(data, len, _sendTimeoutMs); 
+    }
     virtual void taskEntry() {}
     virtual void handleMessage(const void *data, size_t len) = 0;
     virtual void handleTimeout() {}
