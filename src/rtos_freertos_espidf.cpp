@@ -526,7 +526,6 @@ void EspIdfLogSink::write(LogLevel level, const char *tag, const char *msg, size
         ESP_LOGW(tag, "%s", msg);
         break;
     case rtos::LogLevel::Info:
-        printf("I/%s: %s\n", tag, msg);
         ESP_LOGI(tag, "%s", msg);
         break;
     case rtos::LogLevel::Debug:
