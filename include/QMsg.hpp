@@ -18,5 +18,7 @@ public:
     QMsg(C c) : cmd(c), data() {}
 
     size_t size() const { return sizeof(C) + sizeof(D); }
+    size_t payloadSize() const { return sizeof(D); }
+    size_t cmdSize() const { return sizeof(C); }
     D& getData() { return data; }
 };
