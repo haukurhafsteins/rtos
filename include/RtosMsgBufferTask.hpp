@@ -45,7 +45,7 @@ protected:
         return _msgQueue.send(data, len, _sendTimeoutMs); 
     }
     virtual void taskEntry() {}
-    virtual void handleMessage(const void *data, size_t len) = 0;
+    virtual void handleMessage(std::span<const std::byte> data) = 0;
     virtual void handleTimeout() {}
     virtual void handleTimeoutError() {}
 
@@ -61,14 +61,18 @@ private:
             if (_receiveTimeoutMs == RTOS_TASK_WAIT_FOREVER)
             {
                 size_t len = _msgQueue.receive(_msg, sizeof(_msg), _receiveTimeoutMs);
-                handleMessage(_msg, len);
+                std::span<const std::byte> data{reinterpret_cast<const std::byte*>(_msg), len};
+                handleMessage(data);
             }
             else
             {
                 Millis startTimeMs = now_ms();
                 size_t len = _msgQueue.receive(_msg, sizeof(_msg), _receiveTimeoutMs);
+                std::span<const std::byte> data{reinterpret_cast<const std::byte*>(_msg), len};
                 if (len > 0)
-                    handleMessage(_msg, len);
+                {
+                    handleMessage(data);
+                }
                 else
                     handleTimeout();
                 Millis endTimeMs = now_ms();
