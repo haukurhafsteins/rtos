@@ -20,17 +20,27 @@ template <typename T, typename SumT = double, bool IGNORE_NAN = false>
 class MinMaxAvg
 {
 public:
-    struct Stats{
+    struct Stats
+    {
         T min;
         T avg;
         T max;
+        size_t count;
+        static int toJson(const std::string_view name, const Stats &stats, std::span<char> json)
+        {
+            int written = snprintf(json.data(), json.size(), "{\"name\":\"%s\", \"value\":{\"min\":%f, \"avg\":%f, \"max\":%f, \"count\":%u}}",
+                                name.data(), stats.min, stats.avg, stats.max, stats.count);
+            if (written < 0 || static_cast<size_t>(written) >= json.size())
+                json[written-1] = '\0';
+            return written;
+        }
     };
     MinMaxAvg() { reset(); }
     MinMaxAvg(T initialValue) : MinMaxAvg() { add(initialValue); }
 
     void reset()
     {
-        count_ = 0;
+        stats = {0, 0, 0, 0};
         sum_ = (SumT)0;
     }
 
@@ -42,19 +52,19 @@ public:
                 return;
         }
 
-        if (count_ == 0)
+        if (stats.count == 0)
         {
-            min_ = max_ = v;
+            stats.min = stats.max = v;
         }
         else
         {
-            if (v < min_)
-                min_ = v;
-            if (v > max_)
-                max_ = v;
+            if (v < stats.min)
+                stats.min = v;
+            if (v > stats.max)
+                stats.max = v;
         }
         sum_ += (SumT)v;
-        ++count_;
+        ++stats.count;
     }
 
     inline void addMany(const T *data, size_t n)
@@ -64,16 +74,16 @@ public:
     }
 
     // Queries
-    inline bool hasData() const { return count_ > 0; }
-    inline uint32_t getCount() const { return count_; }
-    inline T getMin() const { return min_; } // valid only if hasData()
-    inline T getMax() const { return max_; } // valid only if hasData()
+    inline bool hasData() const { return stats.count > 0; }
+    inline uint32_t getCount() const { return stats.count; }
+    inline T getMin() const { return stats.min; } // valid only if hasData()
+    inline T getMax() const { return stats.max; } // valid only if hasData()
     inline SumT getSum() const { return sum_; }
-    inline SumT getAvg() const { return count_ ? (sum_ / (SumT)count_) : (SumT)0; }
-    inline T getPeak() const { return hasData() ? (max_ > -min_ ? max_ : min_) : (T)0; }
-    inline T getPeakAbs() const { return hasData() ? (max_ > -min_ ? max_ : -min_) : (T)0; }
-    inline T getPeakToPeak() const { return hasData() ? (max_ - min_) : (T)0; }
-    inline T getMidRange() const { return hasData() ? ((max_ + min_) / (T)2) : (T)0; }
+    inline SumT getAvg() const { return stats.count ? (sum_ / (SumT)stats.count) : (SumT)0; }
+    inline T getPeak() const { return hasData() ? (stats.max > -stats.min ? stats.max : stats.min) : (T)0; }
+    inline T getPeakAbs() const { return hasData() ? (stats.max > -stats.min ? stats.max : -stats.min) : (T)0; }
+    inline T getPeakToPeak() const { return hasData() ? (stats.max - stats.min) : (T)0; }
+    inline T getMidRange() const { return hasData() ? ((stats.max + stats.min) / (T)2) : (T)0; }
     inline bool getRange(Stats &out) const
     {
         if (!hasData())
@@ -89,9 +99,9 @@ public:
     inline typename std::enable_if<std::is_integral<U>::value, U>::type
     getAvgRounded() const
     {
-        if (!count_)
+        if (!stats.count)
             return (U)0;
-        U c = (U)count_;
+        U c = (U)stats.count;
         U half = (sum_ >= 0 ? c / 2 : -(c / 2)); // round-to-nearest
         return (sum_ + half) / c;
     }
@@ -101,19 +111,17 @@ public:
     template <typename OutT>
     inline OutT getAvgFixed(OutT scale) const
     {
-        if (!count_)
+        if (!stats.count)
             return (OutT)0;
-        long double avg = (long double)sum_ / (long double)count_;
+        long double avg = (long double)sum_ / (long double)stats.count;
         long double scaled = avg * (long double)scale;
         long double adj = (scaled >= 0) ? 0.5L : -0.5L;
         return (OutT)(scaled + adj);
     }
 
 private:
-    uint32_t count_;
     SumT sum_;
-    T min_;
-    T max_;
+    Stats stats;
 };
 
 using rtos::time::Millis;
