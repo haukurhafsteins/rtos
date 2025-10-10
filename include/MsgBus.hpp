@@ -15,7 +15,7 @@
 
 // As RTTI is disabled, we need our own type identification mechanism.
 using TypeId = const void *;
-using TopicHandle = const uint32_t;
+using TopicHandle = uint32_t;
 
 template <typename T>
 constexpr TypeId getTypeId()
@@ -38,7 +38,8 @@ public:
 
     std::string_view getName() const { return _name; }
     virtual TypeId typeId() const = 0;
-    virtual bool toJson(char *buf, size_t &len) const = 0;
+    virtual int toJson(std::span<char> json, const std::span<const std::byte> buffer) const = 0;
+    virtual int toJson(std::span<char> json) const = 0;
     [[nodiscard]] virtual size_t notify() = 0;
 
     /// @brief Add a subscriber to the topic.
@@ -91,7 +92,7 @@ public:
         return static_cast<TopicHandle>(h);
     }
 
-    const TopicHandle getHandle() const { return handle_; }
+    TopicHandle getHandle() const { return handle_; }
 
 protected:
     struct Sub
@@ -106,24 +107,26 @@ protected:
 };
 
 //-------------------------------------------------------------
-/// @brief Typed topic: publishes QMsg<PayloadType>
+/// @brief Typed topic: publishes QMsg<T>
 ///
 /// Access to the topic is exclusive to one thread at a time.
 /// The topic maintains a list of subscribers (IRtosMsgReceiver + msgId).
-template <typename PayloadType>
+template <typename T>
 class Topic : public TopicBase
 {
-    using WriteCb = std::function<bool(const PayloadType &)>;
-    using FromJson = std::function<bool(const std::string_view &, PayloadType &)>;
-    using ToJson = std::function<bool(const std::string_view &, const PayloadType &, char *, size_t &)>;
+    using WriteCb = std::function<bool(const T &)>;
+    using FromJson = std::function<bool(const std::string_view &, T &)>;
+    /// @brief Callback to convert payload to json string.
+    /// @param [in] name Topic name
+    /// @param [in] data Payload data
+    /// @param [out] json Buffer to write json string to.
+    using ToJson = std::function<int(const std::string_view, const T &, std::span<char>)>;
 
 public:
     /// @brief Construct a new Topic
     /// @param name Topic name (must be unique and a literal string)
     /// @param cb Optional write callback
-    Topic(const std::string_view name, WriteCb cb = nullptr) : TopicBase(name), _writeCb(std::move(cb)), _fromJsonCb(nullptr)
-    {
-    }
+    Topic(const std::string_view name, WriteCb cb = nullptr) : TopicBase(name), _writeCb(std::move(cb)), _toJsonCb(nullptr), _fromJsonCb(nullptr){}
 
     /// @brief Notify all subscribers of a new message. Can only be called
     /// from the thread that owns the topic.
@@ -152,7 +155,7 @@ public:
     /// @brief Get a reference to the topic data for reading or modification.
     /// @note Can only be called from the thread that owns the topic.
     /// @return Reference to the topic data.
-    PayloadType &data() { return msg.getData(); }
+    T &data() { return msg.getData(); }
 
     /// @brief Request a write to the topic. Returns false if writes are not
     /// supported or if the write callback returns false.
@@ -160,7 +163,7 @@ public:
     /// @note This does NOT notify subscribers. The owner of the topic will
     /// need to call notify() after validating and applying the write.
     /// @note Callbacks must be non-throwing.
-    bool requestWrite(const PayloadType &value)
+    bool requestWrite(const T &value)
     {
         if (!_writeCb)
             return false; // writes not supported for this topic
@@ -171,7 +174,7 @@ public:
     {
         if (!_fromJsonCb)
             return false; // writes not supported for this topic
-        PayloadType value;
+        T value;
         if (!_fromJsonCb(json, value))
             return false;
         return _writeCb ? _writeCb(value) : false;
@@ -186,58 +189,46 @@ public:
     /// @note Callbacks must be non-throwing.
     void setToJsonCb(ToJson cb) { _toJsonCb = std::move(cb); }
 
-    TypeId typeId() const override { return getTypeId<PayloadType>(); }
+    TypeId typeId() const override { return getTypeId<T>(); }
 
-    bool toJson(char *buffer, size_t &size) const override
+    int toJson(std::span<char> json, const std::span<const std::byte> buffer) const override
     {
         if (!_toJsonCb)
-            return false;
-        return _toJsonCb(_name, msg.data, buffer, size);
+            return -1;
+        const T *data = reinterpret_cast<const T *>(buffer.data());
+        return _toJsonCb(_name, *data, json);
+    }
+    int toJson(std::span<char> json) const override
+    {
+        if (!_toJsonCb)
+            return -1;
+        return _toJsonCb(_name, msg.data, json);
     }
 
-    void setToJsonCb()
+    static int toJsonFloat(const std::string_view &name, const float &data, std::span<char> json)
     {
-        switch (typeId())
-        {
-        case getTypeId<bool>():
-            _toJsonCb = toJsonBool;
-            break;
-        case getTypeId<int>():
-            _toJsonCb = toJsonInt;
-            break;
-        case getTypeId<float>():
-            _toJsonCb = toJsonFloat;
-            break;
-        }
+        int written = snprintf(json.data(), json.size(), "{\"name\":\"%s\", \"value\":%f}", name.data(), static_cast<float>(data));
+        if (written < 0 || static_cast<size_t>(written) >= json.size())
+            return -1;
+        return written;
     }
-
-    static bool toJsonFloat(const std::string_view &name, const float &data, char *buf, size_t &len)
+    static int toJsonInt(const std::string_view &name, const int &data, std::span<char> json)
     {
-        int written = snprintf(buf, len, "{\"%s\":%f}", name.data(), static_cast<float>(data));
-        if (written < 0 || static_cast<size_t>(written) >= len)
-            return false;
-        len = static_cast<size_t>(written);
-        return true;
+        int written = snprintf(json.data(), json.size(), "{\"name\":\"%s\", \"value\":%d}", name.data(), static_cast<int>(data));
+        if (written < 0 || static_cast<size_t>(written) >= json.size())
+            return -1;
+        return written;
     }
-    static bool toJsonInt(const std::string_view &name, const int &data, char *buf, size_t &len)
+    static int toJsonBool(const std::string_view &name, const bool &data, std::span<char> json)
     {
-        int written = snprintf(buf, len, "{\"%s\":%d}", name.data(), static_cast<int>(data));
-        if (written < 0 || static_cast<size_t>(written) >= len)
-            return false;
-        len = static_cast<size_t>(written);
-        return true;
-    }
-    static bool toJsonBool(const std::string_view &name, const bool &data, char *buf, size_t &len)
-    {
-        int written = snprintf(buf, len, "{\"%s\":%s}", name.data(), data ? "true" : "false");
-        if (written < 0 || static_cast<size_t>(written) >= len)
-            return false;
-        len = static_cast<size_t>(written);
-        return true;
+        int written = snprintf(json.data(), json.size(), "{\"name\":\"%s\", \"value\":%s}", name.data(), data ? "true" : "false");
+        if (written < 0 || static_cast<size_t>(written) >= json.size())
+            return -1;
+        return written;
     }
 
 private:
-    QMsg<uint32_t, PayloadType> msg;
+    QMsg<uint32_t, T> msg;
     WriteCb _writeCb;
     ToJson _toJsonCb;
     FromJson _fromJsonCb;
@@ -277,7 +268,7 @@ public:
     /// the same name already exists.
     /// @note The topic must remain valid for the lifetime of the MsgBus.
     template <typename T>
-    [[nodiscard]] static Result registerTopic(Topic<T> *topic)
+    static Result registerTopic(Topic<T> *topic, TopicHandle *outHandle = nullptr)
     {
         if (!topic)
             return Result::ZERO_TOPIC;
@@ -285,18 +276,20 @@ public:
         auto name = std::string(topic->getName());
         auto hash = TopicBase::fnv1a32(name);
         auto [it, inserted] = topics_.emplace(hash, topic);
+        if (inserted && outHandle)
+            *outHandle = hash;
         return inserted ? Result::OK : Result::TOPIC_EXISTS;
     }
 
-    static const TopicHandle topicHandle(const std::string_view name)
+    static TopicHandle topicHandle(const std::string_view name)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         auto handle = TopicBase::fnv1a32(name);
         auto it = topics_.find(handle);
         return it != topics_.end() ? handle : 0;
     }
-
-    static const std::string_view topicName(const TopicHandle handle)
+    
+    static std::string_view topicName(const TopicHandle handle)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = topics_.find(handle);
@@ -388,7 +381,7 @@ public:
     /// @param json Buffer to write JSON string to.
     /// @param len On input, size of the buffer. On output, number of bytes
     /// @return True if conversion was successful, false otherwise.
-    static Result toJson(const TopicHandle handle, char *json, size_t &len)
+    static Result toJson(const TopicHandle handle, const std::span<const std::byte> buffer, std::span<char> json)
     {
         TopicBase *base = nullptr;
         {
@@ -398,7 +391,23 @@ public:
                 return Result::TOPIC_NOT_FOUND;
             base = it->second;
         }
-        if (base->toJson(json, len))
+        if (base->toJson(json, buffer) > 0)
+        {
+            return Result::OK;
+        }
+        return Result::JSON_PARSE_FAILED;
+    }
+    static Result toJson(const TopicHandle handle, std::span<char> json)
+    {
+        TopicBase *base = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            auto it = topics_.find(handle);
+            if (it == topics_.end())
+                return Result::TOPIC_NOT_FOUND;
+            base = it->second;
+        }
+        if (base->toJson(json))
             return Result::OK;
         return Result::JSON_PARSE_FAILED;
     }
