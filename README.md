@@ -15,6 +15,7 @@ In your makefile define one of the following for the OS to use:
 #### Singleton
 ```c++
 // Header file MyTask.hpp
+#include <span>
 #include <RtosMsgBufferTask.hpp>
 #include <SingletonTask.hpp>
 #include <QMsg.hpp>
@@ -33,7 +34,7 @@ public:
 };
 
 // Provide the maximum possible message size
-class MyTask : public RtosMsgBufferTask<sizeof(QMsg<myCmd, MyMsg2>)>, public SingletonTask<MyTask>
+class MyTask : public RtosMsgBufferTask<sizeof(QMsg<MyCmd, MyMsg2>)>, public SingletonTask<MyTask>
 {
 public:
     MyTask(const char *name, size_t stackSize, int priority, size_t qByteSize);
@@ -42,7 +43,7 @@ public:
     void sendMsg2(MyMsg2 &msg2);
 
 protected:
-    void handleMessage(const void *data, size_t len) override;
+    void handleMessage(std::span<const std::byte> data) override;
     void handleTimeout() override;
 };
 ```
@@ -62,9 +63,9 @@ MyTask::MyTask(const char *name, size_t stackSize, int priority, size_t qByteSiz
 //---------------------------------------------------------------------------
 // Message reception
 //---------------------------------------------------------------------------
-void MyTask::handleMessage(const void *data, size_t len)
+void MyTask::handleMessage(std::span<const std::byte> data)
 {
-    QMsg<MyCmd, uint8_t> *msg = (QMsg<MyCmd, uint8_t> *)data;
+    auto msg = (QMsg<MyCmd, uint8_t> *)data.data();
     switch (msg->cmd)
     {
     case MyCmd::Msg1:
@@ -72,7 +73,7 @@ void MyTask::handleMessage(const void *data, size_t len)
         break;
     case MyCmd::Msg2:
     {
-        QMsg<MyCmd, MyMsg2> *msg = (QMsg<MyCmd, MyMsg2> *)data;
+         auto msg = (QMsg<MyCmd, MyMsg2> *)data.data();
         auto val = msg->getData();
         // ...
         break;

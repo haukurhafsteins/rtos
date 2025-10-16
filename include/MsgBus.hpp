@@ -126,7 +126,7 @@ public:
     /// @brief Construct a new Topic
     /// @param name Topic name (must be unique and a literal string)
     /// @param cb Optional write callback
-    Topic(const std::string_view name, WriteCb cb = nullptr) : TopicBase(name), _writeCb(std::move(cb)), _toJsonCb(nullptr), _fromJsonCb(nullptr){}
+    Topic(const std::string_view name, WriteCb cb = nullptr) : TopicBase(name), _writeCb(std::move(cb)), _toJsonCb(nullptr), _fromJsonCb(nullptr) {}
 
     /// @brief Notify all subscribers of a new message. Can only be called
     /// from the thread that owns the topic.
@@ -288,14 +288,13 @@ public:
         auto it = topics_.find(handle);
         return it != topics_.end() ? handle : 0;
     }
-    
+
     static std::string_view topicName(const TopicHandle handle)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = topics_.find(handle);
         return it != topics_.end() ? it->second->getName() : "";
     }
-
 
     /// @brief Subscribe a receiver to a topic.
     /// @param name Topic name
@@ -306,14 +305,9 @@ public:
     /// Otherwise, the MsgBus will hold a dangling pointer.
     static Result subscribe(const TopicHandle handle, IRtosMsgReceiver &receiver, uint32_t msgId)
     {
-        TopicBase *topic = nullptr;
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            auto it = topics_.find(handle);
-            if (it == topics_.end())
-                return Result::TOPIC_NOT_FOUND;
-            topic = it->second; // safe: topics are never unregistered
-        }
+        TopicBase *topic = findTopic(handle);
+        if (!topic)
+            return Result::TOPIC_NOT_FOUND;
         return topic->addSubscriber(receiver, msgId) ? Result::OK : Result::SUB_EXISTS;
     }
     static Result subscribe(const std::string_view name, IRtosMsgReceiver &receiver, uint32_t msgId)
@@ -353,19 +347,12 @@ public:
     template <typename T>
     static Result requestWrite(const TopicHandle handle, const T &value)
     {
-        TopicBase *base = nullptr;
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            auto it = topics_.find(handle);
-            if (it == topics_.end())
-                return Result::TOPIC_NOT_FOUND;
-            base = it->second;
-        }
-        if (base->typeId() == getTypeId<T>())
-        {
-            return static_cast<Topic<T> *>(base)->requestWrite(value) ? Result::OK : Result::WRITE_FAILED;
-        }
-        return Result::TYPE_MISMATCH;
+        const TopicBase *topic = findTopic(handle);
+        if (!topic)
+            return Result::TOPIC_NOT_FOUND;
+        if (topic->typeId() != getTypeId<T>())
+            return Result::TYPE_MISMATCH;
+        return static_cast<Topic<T> *>(topic)->requestWrite(value) ? Result::OK : Result::WRITE_FAILED;
     }
     template <typename T>
     static Result requestWrite(const std::string_view name, const T &value)
@@ -377,37 +364,25 @@ public:
     }
 
     /// @brief Get a JSON representation of the topic's payload.
-    /// @param name Topic name
+    /// @param handle Topic handle
+    /// @param buffer Buffer containing the payload data.
     /// @param json Buffer to write JSON string to.
-    /// @param len On input, size of the buffer. On output, number of bytes
-    /// @return True if conversion was successful, false otherwise.
+    /// @return Result::OK if successful, Result::TOPIC_NOT_FOUND if the topic does not exist,
     static Result toJson(const TopicHandle handle, const std::span<const std::byte> buffer, std::span<char> json)
     {
-        TopicBase *base = nullptr;
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            auto it = topics_.find(handle);
-            if (it == topics_.end())
-                return Result::TOPIC_NOT_FOUND;
-            base = it->second;
-        }
-        if (base->toJson(json, buffer) > 0)
-        {
+        const TopicBase *topic = findTopic(handle);
+        if (!topic)
+            return Result::TOPIC_NOT_FOUND;
+        if (topic->toJson(json, buffer) > 0)
             return Result::OK;
-        }
         return Result::JSON_PARSE_FAILED;
     }
     static Result toJson(const TopicHandle handle, std::span<char> json)
     {
-        TopicBase *base = nullptr;
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            auto it = topics_.find(handle);
-            if (it == topics_.end())
-                return Result::TOPIC_NOT_FOUND;
-            base = it->second;
-        }
-        if (base->toJson(json))
+        const TopicBase *topic = findTopic(handle);
+        if (!topic)
+            return Result::TOPIC_NOT_FOUND;
+        if (topic->toJson(json))
             return Result::OK;
         return Result::JSON_PARSE_FAILED;
     }
@@ -440,6 +415,14 @@ public:
     }
 
 private:
+    static TopicBase *findTopic(const TopicHandle handle)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = topics_.find(handle);
+        if (it == topics_.end())
+            return nullptr;
+        return it->second;
+    }
     inline static std::map<TopicHandle, TopicBase *> topics_{}; // or unordered_map
     inline static std::mutex mutex_;
 };
