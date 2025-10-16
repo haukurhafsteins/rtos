@@ -347,7 +347,7 @@ public:
     template <typename T>
     static Result requestWrite(const TopicHandle handle, const T &value)
     {
-        const TopicBase *topic = findTopic(handle);
+        TopicBase *topic = findTopic(handle);
         if (!topic)
             return Result::TOPIC_NOT_FOUND;
         if (topic->typeId() != getTypeId<T>())
