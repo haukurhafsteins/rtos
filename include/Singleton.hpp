@@ -3,7 +3,7 @@
 #include "rtos_assert.hpp"
 
 template <typename Derived>
-class SingletonTask {
+class Singleton {
 public:
     static Derived& get() {
         RTOS_ENSURE(_instance != nullptr);
@@ -19,6 +19,6 @@ public:
     static bool is_bound() { return _instance != nullptr; }
 
 protected:
-    SingletonTask() = default;
+    Singleton() = default;
     static inline Derived* _instance = nullptr; // C++17 inline var avoids separate definition
 };

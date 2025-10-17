@@ -17,7 +17,7 @@ In your makefile define one of the following for the OS to use:
 // Header file MyTask.hpp
 #include <span>
 #include <RtosMsgBufferTask.hpp>
-#include <SingletonTask.hpp>
+#include <Singleton.hpp>
 #include <QMsg.hpp>
 
 // List of commands the task can receive
@@ -34,7 +34,7 @@ public:
 };
 
 // Provide the maximum possible message size
-class MyTask : public RtosMsgBufferTask<sizeof(QMsg<MyCmd, MyMsg2>)>, public SingletonTask<MyTask>
+class MyTask : public RtosMsgBufferTask<sizeof(QMsg<MyCmd, MyMsg2>)>, public Singleton<MyTask>
 {
 public:
     MyTask(const char *name, size_t stackSize, int priority, size_t qByteSize);
@@ -114,7 +114,7 @@ TheTask mytask2("task2", 4096, 3, 256);
 #### Singleton
 ```c++
 // Define globally the _instance variable for the singleton
-template <> MyTask *SingletonTask<GestureTask>::_instance = nullptr;
+template <> MyTask *Singleton<GestureTask>::_instance = nullptr;
 ...
 void main(void)
 {

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "RtosMsgBufferTask.hpp"
-#include "SingletonTask.hpp"
+#include "Singleton.hpp"
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -20,7 +20,7 @@ enum class SchedulerCmd : uint8_t
 
 struct SMsg; // Forward declaration of SMsg
 
-class MsgSchedulerTask : public RtosMsgBufferTask<sizeof(QMsg<SchedulerCmd, SMsg>*)>, public SingletonTask<MsgSchedulerTask>
+class MsgSchedulerTask : public RtosMsgBufferTask<sizeof(QMsg<SchedulerCmd, SMsg>*)>, public Singleton<MsgSchedulerTask>
 {
 public:
     struct SMsg
