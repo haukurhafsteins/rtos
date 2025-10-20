@@ -26,12 +26,12 @@ public:
         T avg;
         T max;
         size_t count;
-        static int toJson(const std::string_view name, const Stats &stats, std::span<char> json)
+        static int toJson(const Stats &stats, std::span<char> json)
         {
-            int written = snprintf(json.data(), json.size(), "{\"name\":\"%s\", \"value\":{\"min\":%f, \"avg\":%f, \"max\":%f, \"count\":%u}}",
-                                name.data(), stats.min, stats.avg, stats.max, stats.count);
+            int written = snprintf(json.data(), json.size(), "{\"min\":%f, \"avg\":%f, \"max\":%f, \"count\":%u}",
+                                  stats.min, stats.avg, stats.max, stats.count);
             if (written < 0 || static_cast<size_t>(written) >= json.size())
-                json[written-1] = '\0';
+                json[written - 1] = '\0';
             return written;
         }
     };
