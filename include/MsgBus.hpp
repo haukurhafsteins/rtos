@@ -12,10 +12,11 @@
 #include <string_view>
 #include <algorithm>
 #include <typeinfo>
+#include "esp_log.h"
 
 // As RTTI is disabled, we need our own type identification mechanism.
 using TypeId = const void *;
-using TopicHandle = uint32_t;
+using TopicId = uint32_t;
 
 template <typename T>
 constexpr TypeId getTypeId()
@@ -33,7 +34,7 @@ constexpr TypeId getTypeId()
 class TopicBase
 {
 public:
-    explicit TopicBase(const std::string_view n) : _name(n), handle_(fnv1a32(n)) {}
+    explicit TopicBase(const std::string_view n) : _name(n), topicId(fnv1a32(n)) {}
     virtual ~TopicBase() = default;
 
     std::string_view getName() const { return _name; }
@@ -44,17 +45,18 @@ public:
 
     /// @brief Add a subscriber to the topic.
     /// @param q Message queue to subscribe.
-    /// @param msgId Message ID to subscribe to.
+    /// @param topicId Topic ID to subscribe to.
     /// @return True if the subscriber was added, false if it already exists.
-    [[nodiscard]] bool addSubscriber(IRtosMsgReceiver &q, uint32_t msgId)
+    [[nodiscard]] bool addSubscriber(IRtosMsgReceiver &q, TopicId topicId)
     {
         std::lock_guard<std::mutex> lk(subs_mtx_);
+        // printf("Adding subscriber to topic %s, queue: %p topicId: %lu\n", _name.data(), &q, topicId);
         auto it = find_if(subscribers_.begin(), subscribers_.end(),
                           [&](const Sub &s)
-                          { return s.q == &q && s.id == msgId; });
+                          { return s.q == &q && s.id == topicId; });
         if (it == subscribers_.end())
         {
-            subscribers_.push_back(Sub{&q, msgId});
+            subscribers_.push_back(Sub{&q, topicId});
             return true;
         }
         return false;
@@ -63,14 +65,14 @@ public:
     /// @brief Remove a subscriber from the topic.
     /// @note Must be called before the subscriber is deleted.
     /// @param q Message queue to unsubscribe.
-    /// @param msgId Message ID to unsubscribe from.
+    /// @param topicId Topic ID to unsubscribe from.
     /// @return True if the subscriber was removed, false if it did not exist.
-    [[nodiscard]] bool removeSubscriber(IRtosMsgReceiver &q, uint32_t msgId)
+    [[nodiscard]] bool removeSubscriber(IRtosMsgReceiver &q, TopicId topicId)
     {
         std::lock_guard<std::mutex> lk(subs_mtx_);
         auto it = remove_if(subscribers_.begin(), subscribers_.end(),
                             [&](const Sub &s)
-                            { return s.q == &q && s.id == msgId; });
+                            { return s.q == &q && s.id == topicId; });
         if (it != subscribers_.end())
         {
             subscribers_.erase(it, subscribers_.end());
@@ -79,9 +81,9 @@ public:
         return false;
     }
 
-    constexpr static TopicHandle INVALID_HANDLE = 0;
+    constexpr static TopicId INVALID_TOPIC_ID = 0;
 
-    static constexpr TopicHandle fnv1a32(std::string_view s)
+    static constexpr TopicId fnv1a32(std::string_view s)
     {
         uint32_t h = 0x811C9DC5u;
         for (unsigned char c : s)
@@ -89,10 +91,15 @@ public:
             h ^= c;
             h *= 0x01000193u;
         }
-        return static_cast<TopicHandle>(h);
+        return static_cast<TopicId>(h);
     }
 
-    TopicHandle getHandle() const { return handle_; }
+    TopicId getId() const { return topicId; }
+    size_t subscribers() const
+    {
+        std::lock_guard<std::mutex> lk(subs_mtx_);
+        return subscribers_.size();
+    }
 
 protected:
     struct Sub
@@ -103,14 +110,14 @@ protected:
     std::vector<Sub> subscribers_;
     mutable std::mutex subs_mtx_;
     const std::string_view _name;
-    TopicHandle handle_{INVALID_HANDLE};
+    TopicId topicId{INVALID_TOPIC_ID};
 };
 
 //-------------------------------------------------------------
 /// @brief Typed topic: publishes QMsg<T>
 ///
 /// Access to the topic is exclusive to one thread at a time.
-/// The topic maintains a list of subscribers (IRtosMsgReceiver + msgId).
+/// The topic maintains a list of subscribers (IRtosMsgReceiver and topicId).
 template <typename T>
 class Topic : public TopicBase
 {
@@ -120,7 +127,7 @@ class Topic : public TopicBase
     /// @param [in] name Topic name
     /// @param [in] data Payload data
     /// @param [out] json Buffer to write json string to.
-    using ToJson = std::function<int(const std::string_view, const T &, std::span<char>)>;
+    using ToJson = std::function<int(const T &, std::span<char>)>;
 
 public:
     /// @brief Construct a new Topic
@@ -196,32 +203,32 @@ public:
         if (!_toJsonCb)
             return -1;
         const T *data = reinterpret_cast<const T *>(buffer.data());
-        return _toJsonCb(_name, *data, json);
+        return _toJsonCb(*data, json);
     }
     int toJson(std::span<char> json) const override
     {
         if (!_toJsonCb)
             return -1;
-        return _toJsonCb(_name, msg.data, json);
+        return _toJsonCb(msg.data, json);
     }
 
-    static int toJsonFloat(const std::string_view &name, const float &data, std::span<char> json)
+    static int toJsonFloat(const float &data, std::span<char> json)
     {
-        int written = snprintf(json.data(), json.size(), "{\"name\":\"%s\", \"value\":%f}", name.data(), static_cast<float>(data));
+        int written = snprintf(json.data(), json.size(), "%f", static_cast<float>(data));
         if (written < 0 || static_cast<size_t>(written) >= json.size())
             return -1;
         return written;
     }
-    static int toJsonInt(const std::string_view &name, const int &data, std::span<char> json)
+    static int toJsonInt(const int &data, std::span<char> json)
     {
-        int written = snprintf(json.data(), json.size(), "{\"name\":\"%s\", \"value\":%d}", name.data(), static_cast<int>(data));
+        int written = snprintf(json.data(), json.size(), "%d", static_cast<int>(data));
         if (written < 0 || static_cast<size_t>(written) >= json.size())
             return -1;
         return written;
     }
-    static int toJsonBool(const std::string_view &name, const bool &data, std::span<char> json)
+    static int toJsonBool(const bool &data, std::span<char> json)
     {
-        int written = snprintf(json.data(), json.size(), "{\"name\":\"%s\", \"value\":%s}", name.data(), data ? "true" : "false");
+        int written = snprintf(json.data(), json.size(), "%s", data ? "true" : "false");
         if (written < 0 || static_cast<size_t>(written) >= json.size())
             return -1;
         return written;
@@ -261,6 +268,13 @@ public:
         WRITE_FAILED,
         JSON_PARSE_FAILED
     };
+    struct TopicInfo
+    {
+        std::string name;
+        std::string type;
+        size_t subscribers;
+    };
+
     /// @brief Register a topic with the message bus.
     /// @tparam T Payload type
     /// @param topic Pointer to the topic to register. Must not be null.
@@ -268,28 +282,29 @@ public:
     /// the same name already exists.
     /// @note The topic must remain valid for the lifetime of the MsgBus.
     template <typename T>
-    static Result registerTopic(Topic<T> *topic, TopicHandle *outHandle = nullptr)
+    static Result registerTopic(Topic<T> *topic, TopicId *outHandle = nullptr)
     {
+        ESP_LOGI("MsgBus", "Registering topic: %s", topic->getName().data());
         if (!topic)
             return Result::ZERO_TOPIC;
         std::lock_guard<std::mutex> lock(mutex_);
         auto name = std::string(topic->getName());
-        auto hash = TopicBase::fnv1a32(name);
-        auto [it, inserted] = topics_.emplace(hash, topic);
+        auto topicHandle = TopicBase::fnv1a32(name);
+        auto [it, inserted] = topics_.emplace(topicHandle, topic);
         if (inserted && outHandle)
-            *outHandle = hash;
+            *outHandle = topicHandle;
         return inserted ? Result::OK : Result::TOPIC_EXISTS;
     }
 
-    static TopicHandle topicHandle(const std::string_view name)
+    static TopicId topicHandle(const std::string_view name)
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        auto handle = TopicBase::fnv1a32(name);
-        auto it = topics_.find(handle);
-        return it != topics_.end() ? handle : 0;
+        auto topicHandle = TopicBase::fnv1a32(name);
+        auto it = topics_.find(topicHandle);
+        return it != topics_.end() ? topicHandle : 0;
     }
 
-    static std::string_view topicName(const TopicHandle handle)
+    static std::string_view topicName(const TopicId handle)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = topics_.find(handle);
@@ -299,41 +314,36 @@ public:
     /// @brief Subscribe a receiver to a topic.
     /// @param name Topic name
     /// @param receiver Receiver message buffer
-    /// @param msgId Message ID
     /// @return True if subscription was successful, false otherwise.
     /// @note Before a subscriber is deleted, it must unsubscribe from all topics.
     /// Otherwise, the MsgBus will hold a dangling pointer.
-    static Result subscribe(const TopicHandle handle, IRtosMsgReceiver &receiver, uint32_t msgId)
+    static Result subscribe(const TopicId handle, IRtosMsgReceiver &receiver)
     {
         TopicBase *topic = findTopic(handle);
         if (!topic)
             return Result::TOPIC_NOT_FOUND;
-        return topic->addSubscriber(receiver, msgId) ? Result::OK : Result::SUB_EXISTS;
+        return topic->addSubscriber(receiver, handle) ? Result::OK : Result::SUB_EXISTS;
     }
-    static Result subscribe(const std::string_view name, IRtosMsgReceiver &receiver, uint32_t msgId)
+    static Result subscribe(const std::string_view name, IRtosMsgReceiver &receiver)
     {
-        const TopicHandle handle = topicHandle(name);
-        if (handle == 0)
-            return Result::TOPIC_NOT_FOUND;
-        return subscribe(handle, receiver, msgId);
+        return subscribe(topicHandle(name), receiver);
     }
 
     /// @brief Unsubscribe a receiver from a topic.
-    /// @param name Topic name
+    /// @param topicId Topic ID
     /// @param receiver Receiver message buffer
-    /// @param msgId Message ID
     /// @return True if unsubscription was successful, false otherwise.
-    static Result unsubscribe(const TopicHandle handle, IRtosMsgReceiver &receiver, uint32_t msgId)
+    static Result unsubscribe(const TopicId topicId, IRtosMsgReceiver &receiver)
     {
         TopicBase *topic = nullptr;
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            auto it = topics_.find(handle);
+            auto it = topics_.find(topicId);
             if (it == topics_.end())
                 return Result::TOPIC_NOT_FOUND;
             topic = it->second; // safe: topics are never unregistered
         }
-        return topic->removeSubscriber(receiver, msgId) ? Result::OK : Result::SUB_NOT_FOUND;
+        return topic->removeSubscriber(receiver, topicId) ? Result::OK : Result::SUB_NOT_FOUND;
     }
 
     /// @brief Write a value to a topic. The topic must support writes
@@ -345,7 +355,7 @@ public:
     ///  @note This does NOT notify subscribers. The owner of the topic will
     /// need to call notify() after validating and applying the write.
     template <typename T>
-    static Result requestWrite(const TopicHandle handle, const T &value)
+    static Result requestWrite(const TopicId handle, const T &value)
     {
         TopicBase *topic = findTopic(handle);
         if (!topic)
@@ -357,7 +367,7 @@ public:
     template <typename T>
     static Result requestWrite(const std::string_view name, const T &value)
     {
-        const TopicHandle handle = topicHandle(name);
+        const TopicId handle = topicHandle(name);
         if (handle == 0)
             return Result::TOPIC_NOT_FOUND;
         return requestWrite<T>(handle, value);
@@ -368,7 +378,7 @@ public:
     /// @param buffer Buffer containing the payload data.
     /// @param json Buffer to write JSON string to.
     /// @return Result::OK if successful, Result::TOPIC_NOT_FOUND if the topic does not exist,
-    static Result toJson(const TopicHandle handle, const std::span<const std::byte> buffer, std::span<char> json)
+    static Result toJson(const TopicId handle, const std::span<const std::byte> buffer, std::span<char> json)
     {
         const TopicBase *topic = findTopic(handle);
         if (!topic)
@@ -377,7 +387,7 @@ public:
             return Result::OK;
         return Result::JSON_PARSE_FAILED;
     }
-    static Result toJson(const TopicHandle handle, std::span<char> json)
+    static Result toJson(const TopicId handle, std::span<char> json)
     {
         const TopicBase *topic = findTopic(handle);
         if (!topic)
@@ -387,7 +397,7 @@ public:
         return Result::JSON_PARSE_FAILED;
     }
 
-    std::string_view resultToString(Result r)
+    static std::string_view resultToString(Result r)
     {
         switch (r)
         {
@@ -414,8 +424,29 @@ public:
         }
     }
 
+    static void getTopicList(std::vector<TopicId> &outList)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (const auto &[handle, topic] : topics_)
+        {
+            outList.push_back(handle);
+        }
+    }
+
+    static Result getTopicInfo(const TopicId topic, TopicInfo &info)
+    {
+        info.name = std::string(topicName(topic));
+        TopicBase *topicPtr = findTopic(topic);
+        if (!topicPtr)
+            return Result::TOPIC_NOT_FOUND;
+        // RTTI is disabled, so we cannot use typeid; return a safe default.
+        info.type = "unknown";
+        info.subscribers = topicPtr->subscribers();
+        return Result::OK;
+    }
+
 private:
-    static TopicBase *findTopic(const TopicHandle handle)
+    static TopicBase *findTopic(const TopicId handle)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = topics_.find(handle);
@@ -423,6 +454,6 @@ private:
             return nullptr;
         return it->second;
     }
-    inline static std::map<TopicHandle, TopicBase *> topics_{}; // or unordered_map
+    inline static std::map<TopicId, TopicBase *> topics_{}; // or unordered_map
     inline static std::mutex mutex_;
 };
