@@ -296,37 +296,38 @@ public:
         return inserted ? Result::OK : Result::TOPIC_EXISTS;
     }
 
-    static TopicId topicHandle(const std::string_view name)
+    static TopicId topicId(const std::string_view name)
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        auto topicHandle = TopicBase::fnv1a32(name);
-        auto it = topics_.find(topicHandle);
-        return it != topics_.end() ? topicHandle : 0;
+        auto topicId = TopicBase::fnv1a32(name);
+        auto it = topics_.find(topicId);
+        return it != topics_.end() ? topicId : 0;
     }
 
-    static std::string_view topicName(const TopicId handle)
+    static std::string_view topicName(const TopicId topicId)
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        auto it = topics_.find(handle);
+        auto it = topics_.find(topicId);
         return it != topics_.end() ? it->second->getName() : "";
     }
 
     /// @brief Subscribe a receiver to a topic.
     /// @param name Topic name
     /// @param receiver Receiver message buffer
-    /// @return True if subscription was successful, false otherwise.
+    /// @return OK if subscription was successful, TOPIC_NOT_FOUND if the topic does not exist,
+    /// SUB_EXISTS if the receiver is already subscribed to the topic.
     /// @note Before a subscriber is deleted, it must unsubscribe from all topics.
     /// Otherwise, the MsgBus will hold a dangling pointer.
-    static Result subscribe(const TopicId handle, IRtosMsgReceiver &receiver)
+    static Result subscribe(const TopicId topicId, IRtosMsgReceiver &receiver)
     {
-        TopicBase *topic = findTopic(handle);
+        TopicBase *topic = findTopic(topicId);
         if (!topic)
             return Result::TOPIC_NOT_FOUND;
-        return topic->addSubscriber(receiver, handle) ? Result::OK : Result::SUB_EXISTS;
+        return topic->addSubscriber(receiver, topicId) ? Result::OK : Result::SUB_EXISTS;
     }
     static Result subscribe(const std::string_view name, IRtosMsgReceiver &receiver)
     {
-        return subscribe(topicHandle(name), receiver);
+        return subscribe(topicId(name), receiver);
     }
 
     /// @brief Unsubscribe a receiver from a topic.
@@ -355,9 +356,9 @@ public:
     ///  @note This does NOT notify subscribers. The owner of the topic will
     /// need to call notify() after validating and applying the write.
     template <typename T>
-    static Result requestWrite(const TopicId handle, const T &value)
+    static Result requestWrite(const TopicId topicId, const T &value)
     {
-        TopicBase *topic = findTopic(handle);
+        TopicBase *topic = findTopic(topicId);
         if (!topic)
             return Result::TOPIC_NOT_FOUND;
         if (topic->typeId() != getTypeId<T>())
@@ -367,10 +368,10 @@ public:
     template <typename T>
     static Result requestWrite(const std::string_view name, const T &value)
     {
-        const TopicId handle = topicHandle(name);
-        if (handle == 0)
+        const TopicId topicId = MsgBus::topicId(name);
+        if (topicId == 0)
             return Result::TOPIC_NOT_FOUND;
-        return requestWrite<T>(handle, value);
+        return requestWrite<T>(topicId, value);
     }
 
     /// @brief Get a JSON representation of the topic's payload.
@@ -378,18 +379,18 @@ public:
     /// @param buffer Buffer containing the payload data.
     /// @param json Buffer to write JSON string to.
     /// @return Result::OK if successful, Result::TOPIC_NOT_FOUND if the topic does not exist,
-    static Result toJson(const TopicId handle, const std::span<const std::byte> buffer, std::span<char> json)
+    static Result toJson(const TopicId topicId, const std::span<const std::byte> buffer, std::span<char> json)
     {
-        const TopicBase *topic = findTopic(handle);
+        const TopicBase *topic = findTopic(topicId);
         if (!topic)
             return Result::TOPIC_NOT_FOUND;
         if (topic->toJson(json, buffer) > 0)
             return Result::OK;
         return Result::JSON_PARSE_FAILED;
     }
-    static Result toJson(const TopicId handle, std::span<char> json)
+    static Result toJson(const TopicId topicId, std::span<char> json)
     {
-        const TopicBase *topic = findTopic(handle);
+        const TopicBase *topic = findTopic(topicId);
         if (!topic)
             return Result::TOPIC_NOT_FOUND;
         if (topic->toJson(json))
