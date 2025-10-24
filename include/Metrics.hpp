@@ -19,7 +19,7 @@ struct Metrics
         tonne,
         iaq,
     };
-    static constexpr std::array<Unit, 11> getArray()
+    static constexpr std::array<Unit, 13> getArray()
     {
         return {
             Unit::none,
