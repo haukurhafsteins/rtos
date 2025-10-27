@@ -284,7 +284,6 @@ public:
     template <typename T>
     static Result registerTopic(Topic<T> *topic, TopicId *outHandle = nullptr)
     {
-        ESP_LOGI("MsgBus", "Registering topic: %s", topic->getName().data());
         if (!topic)
             return Result::ZERO_TOPIC;
         std::lock_guard<std::mutex> lock(mutex_);
