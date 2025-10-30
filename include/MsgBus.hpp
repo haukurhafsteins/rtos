@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <typeinfo>
 #include "esp_log.h"
+#include "Metrics.hpp"
 
 // As RTTI is disabled, we need our own type identification mechanism.
 using TypeId = const void *;
@@ -34,12 +35,12 @@ constexpr TypeId getTypeId()
 class TopicBase
 {
 public:
-    explicit TopicBase(const std::string_view n) : _name(n), topicId(fnv1a32(n)) {}
+    explicit TopicBase(const std::string_view n) : _name(n), topicUnit(Metrics::Unit::none), topicId(fnv1a32(n)) {}
     virtual ~TopicBase() = default;
 
     std::string_view getName() const { return _name; }
     virtual TypeId typeId() const = 0;
-    virtual int toJson(std::span<char> json, const std::span<const std::byte> buffer) const = 0;
+    virtual int toJson(std::span<char> json, const std::span<const std::byte> buffer, const char *format) const = 0;
     virtual int toJson(std::span<char> json) const = 0;
     [[nodiscard]] virtual size_t notify() = 0;
 
@@ -95,6 +96,10 @@ public:
     }
 
     TopicId getId() const { return topicId; }
+    const Metrics::Unit &getUnit() const { return topicUnit; }
+    const std::string &getFormat() const { return format; }
+    void setUnit(Metrics::Unit unit) { topicUnit = unit; }
+    void setFormat(const std::string &fmt) { format = fmt; }
     size_t subscribers() const
     {
         std::lock_guard<std::mutex> lk(subs_mtx_);
@@ -110,7 +115,9 @@ protected:
     std::vector<Sub> subscribers_;
     mutable std::mutex subs_mtx_;
     const std::string_view _name;
-    TopicId topicId{INVALID_TOPIC_ID};
+    Metrics::Unit topicUnit;
+    TopicId topicId;
+    std::string format{""};
 };
 
 //-------------------------------------------------------------
@@ -118,16 +125,15 @@ protected:
 ///
 /// Access to the topic is exclusive to one thread at a time.
 /// The topic maintains a list of subscribers (IRtosMsgReceiver and topicId).
-template <typename T>
+template <typename T, Metrics::Unit U = Metrics::Unit::none>
 class Topic : public TopicBase
 {
     using WriteCb = std::function<bool(const T &)>;
     using FromJson = std::function<bool(const std::string_view &, T &)>;
     /// @brief Callback to convert payload to json string.
-    /// @param [in] name Topic name
-    /// @param [in] data Payload data
+    /// @param [in] value Current value
     /// @param [out] json Buffer to write json string to.
-    using ToJson = std::function<int(const T &, std::span<char>)>;
+    using ToJson = std::function<int(const T &value, std::span<char> json, const char *format)>;
 
 public:
     /// @brief Construct a new Topic
@@ -198,35 +204,35 @@ public:
 
     TypeId typeId() const override { return getTypeId<T>(); }
 
-    int toJson(std::span<char> json, const std::span<const std::byte> buffer) const override
+    int toJson(std::span<char> json, const std::span<const std::byte> buffer, const char *format) const override
     {
         if (!_toJsonCb)
             return -1;
         const T *data = reinterpret_cast<const T *>(buffer.data());
-        return _toJsonCb(*data, json);
+        return _toJsonCb(*data, json, format);
     }
     int toJson(std::span<char> json) const override
     {
         if (!_toJsonCb)
             return -1;
-        return _toJsonCb(msg.data, json);
+        return _toJsonCb(msg.data, json, nullptr);
     }
 
-    static int toJsonFloat(const float &data, std::span<char> json)
+    static int toJsonFloat(const float &data, std::span<char> json, const char *format)
     {
-        int written = snprintf(json.data(), json.size(), "%f", static_cast<float>(data));
+        int written = snprintf(json.data(), json.size(), format ? format : "%f", static_cast<float>(data));
         if (written < 0 || static_cast<size_t>(written) >= json.size())
             return -1;
         return written;
     }
-    static int toJsonInt(const int &data, std::span<char> json)
+    static int toJsonInt(const int &data, std::span<char> json, const char *format)
     {
         int written = snprintf(json.data(), json.size(), "%d", static_cast<int>(data));
         if (written < 0 || static_cast<size_t>(written) >= json.size())
             return -1;
         return written;
     }
-    static int toJsonBool(const bool &data, std::span<char> json)
+    static int toJsonBool(const bool &data, std::span<char> json, const char *format)
     {
         int written = snprintf(json.data(), json.size(), "%s", data ? "true" : "false");
         if (written < 0 || static_cast<size_t>(written) >= json.size())
@@ -383,7 +389,7 @@ public:
         const TopicBase *topic = findTopic(topicId);
         if (!topic)
             return Result::TOPIC_NOT_FOUND;
-        if (topic->toJson(json, buffer) > 0)
+        if (topic->toJson(json, buffer, topic->getFormat().c_str()) > 0)
             return Result::OK;
         return Result::JSON_PARSE_FAILED;
     }
