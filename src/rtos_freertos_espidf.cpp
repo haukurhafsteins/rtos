@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "backend.hpp"
@@ -6,6 +7,7 @@
 #include "rtos_assert.hpp"
 #include "RtosLog.hpp"
 #include "RtosLogSinks.hpp"
+#include "Gpio.hpp"
 
 extern "C"
 {
@@ -18,6 +20,8 @@ extern "C"
 
 #include "esp_timer.h"
 #include <esp_log.h>
+#include <driver/gpio.h>
+#include <esp_timer.h>
 
 static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -421,18 +425,24 @@ bool RtosLog::shouldEmit(LogLevel level, const char *tag)
 
 void RtosLog::lock()
 {
-    if (xPortInIsrContext()) {
+    if (xPortInIsrContext())
+    {
         portENTER_CRITICAL_ISR(&s_mux);
-    } else {
+    }
+    else
+    {
         portENTER_CRITICAL(&s_mux);
     }
 }
 
 void RtosLog::unlock()
 {
-    if (xPortInIsrContext()) {
+    if (xPortInIsrContext())
+    {
         portEXIT_CRITICAL_ISR(&s_mux);
-    } else {
+    }
+    else
+    {
         portEXIT_CRITICAL(&s_mux);
     }
 }
@@ -460,42 +470,42 @@ void RtosLog::vlog(LogLevel level, const char *tag, const char *msg, va_list ap)
         break;
     }
 
-//     if (!shouldEmit(level, tag))
-//         return;
+    //     if (!shouldEmit(level, tag))
+    //         return;
 
-//     // Format the message body
-//     char body[RTOS_LOG_LINE_MAX];
-//     int n = std::vsnprintf(body, sizeof(body), msg ? msg : "", ap);
-//     if (n < 0)
-//         return; // formatting error
+    //     // Format the message body
+    //     char body[RTOS_LOG_LINE_MAX];
+    //     int n = std::vsnprintf(body, sizeof(body), msg ? msg : "", ap);
+    //     if (n < 0)
+    //         return; // formatting error
 
-//     // Compose final line with prefix
-//     char line[RTOS_LOG_LINE_MAX];
+    //     // Compose final line with prefix
+    //     char line[RTOS_LOG_LINE_MAX];
 
-// #if RTOS_LOG_SHOW_FILELINE
-//     // Detect presence of FILE and LINE via GNU extensions: not available here; caller may bake in if desired
-// #endif
+    // #if RTOS_LOG_SHOW_FILELINE
+    //     // Detect presence of FILE and LINE via GNU extensions: not available here; caller may bake in if desired
+    // #endif
 
-//     const char *t = tag ? tag : "rtos";
+    //     const char *t = tag ? tag : "rtos";
 
-// #if RTOS_LOG_SHOW_TIME
-//     int m = std::snprintf(line, sizeof(line), "[%llu] %c/%s: %s", rtos::time::now_ms().count(), levelChar(level), t, body);
-// #else
-//     int m = std::snprintf(line, sizeof(line), "%c/%s: %s", levelChar(level), t, body);
-// #endif
-//     if (m < 0)
-//         return;
-//     size_t lineLen = (m < (int)sizeof(line)) ? (size_t)m : sizeof(line) - 1;
+    // #if RTOS_LOG_SHOW_TIME
+    //     int m = std::snprintf(line, sizeof(line), "[%llu] %c/%s: %s", rtos::time::now_ms().count(), levelChar(level), t, body);
+    // #else
+    //     int m = std::snprintf(line, sizeof(line), "%c/%s: %s", levelChar(level), t, body);
+    // #endif
+    //     if (m < 0)
+    //         return;
+    //     size_t lineLen = (m < (int)sizeof(line)) ? (size_t)m : sizeof(line) - 1;
 
-//     // Write to sinks
-//     lock();
-//     for (size_t i = 0; i < s_sinkCount; ++i)
-//     {
-//         auto *s = s_sinks[i];
-//         if (s && s->enabled(level))
-//             s->write(level, t, line, lineLen);
-//     }
-//     unlock();
+    //     // Write to sinks
+    //     lock();
+    //     for (size_t i = 0; i < s_sinkCount; ++i)
+    //     {
+    //         auto *s = s_sinks[i];
+    //         if (s && s->enabled(level))
+    //             s->write(level, t, line, lineLen);
+    //     }
+    //     unlock();
 }
 
 void RtosLog::log(LogLevel level, const char *tag, const char *fmt, ...)
@@ -536,5 +546,238 @@ void EspIdfLogSink::write(LogLevel level, const char *tag, const char *msg, size
         break;
     default:
         break;
+    }
+}
+
+//-----------------------------------------------------------------------------
+// GPIO implementation for ESP-IDF
+//-----------------------------------------------------------------------------
+
+#include <driver/gpio.h>
+#include <esp_timer.h>
+#include <cstdlib>
+#include <cstring>
+
+namespace rtos
+{
+    namespace gpio
+    {
+
+        // Board mapping: logical id -> ESP32 GPIO number
+        // Customize this table for your board.
+        static constexpr int kPinMap[] = {
+            // id: 0..N-1 -> gpio_num_t
+            // Example placeholder mapping: {0->GPIO0, 1->GPIO1, ...}
+            // Replace with your real map; invalid entries set to -1
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+        };
+
+        static inline uint64_t now_us() { return esp_timer_get_time(); }
+
+        class EspIdfImpl final : public Pin::Impl
+        {
+        public:
+            explicit EspIdfImpl(int gpio_num, const Config &cfg)
+                : gpio_(static_cast<gpio_num_t>(gpio_num)) { apply(cfg); }
+
+            ~EspIdfImpl() override
+            {
+                // Disable interrupt and revert to input
+                gpio_isr_handler_remove(gpio_);
+            }
+
+            void reconfigure(const Config &cfg) override { apply(cfg); }
+
+            bool read() const override { return gpio_get_level(gpio_) != 0; }
+
+            void write(bool level) override { gpio_set_level(gpio_, level ? 1 : 0); }
+
+            void toggle() override { write(!read()); }
+
+            void enable_interrupt(Trigger trig) override
+            {
+                gpio_int_type_t type = GPIO_INTR_DISABLE;
+                switch (trig)
+                {
+                case Trigger::Rising:
+                    type = GPIO_INTR_POSEDGE;
+                    break;
+                case Trigger::Falling:
+                    type = GPIO_INTR_NEGEDGE;
+                    break;
+                case Trigger::Both:
+                    type = GPIO_INTR_ANYEDGE;
+                    break;
+                case Trigger::LevelHigh:
+                    type = GPIO_INTR_HIGH_LEVEL;
+                    break;
+                case Trigger::LevelLow:
+                    type = GPIO_INTR_LOW_LEVEL;
+                    break;
+                default:
+                    type = GPIO_INTR_DISABLE;
+                    break;
+                }
+                gpio_set_intr_type(gpio_, type);
+                gpio_intr_enable(gpio_);
+            }
+
+            void disable_interrupt() override { gpio_intr_disable(gpio_); }
+
+            void set_callback(Callback cb) override { cb_ = std::move(cb); }
+
+            void attach_queue(RtosQueue<Event> *q) override { queue_ = q; }
+
+            void set_debounce_us(uint32_t us) override { debounce_us_ = us; }
+
+            // Install once globally (call from your platform init)
+            static void ensure_isr_service()
+            {
+                static bool installed = false;
+                if (!installed)
+                {
+                    gpio_install_isr_service(0);
+                    installed = true;
+                }
+            }
+
+            // Hook from ISR
+            void isr_handler()
+            {
+                const uint64_t t = now_us();
+                const bool level = read();
+                const uint64_t since = t - last_isr_us_;
+                if (debounce_us_ && since < debounce_us_)
+                    return; // debounce
+                last_isr_us_ = t;
+                ++isr_count_;
+
+                if (queue_)
+                {
+                    Event ev{logical_id_, Trigger::Both, level, isr_count_, t};
+                    // NOTE: We can't include queue implementation here; backend should
+                    // provide a thin shim in platform glue to push from ISR.
+                    // We'll call a weak symbol that user must implement.
+                    backend_queue_send_from_isr(queue_, ev);
+                }
+                if (cb_)
+                { // defer: schedule a task-level trampoline
+                    backend_defer_to_task([ev = Event{logical_id_, Trigger::Both, level, isr_count_, t}, cb = cb_]
+                                          { cb(ev); });
+                }
+            }
+
+            int logical_id_ = -1; // filled by factory
+
+        private:
+            void apply(const Config &cfg)
+            {
+                gpio_config_t io{};
+                io.pin_bit_mask = (1ULL << gpio_);
+                io.intr_type = GPIO_INTR_DISABLE;
+                switch (cfg.mode)
+                {
+                case Mode::Input:
+                    io.mode = GPIO_MODE_INPUT;
+                    break;
+                case Mode::Output:
+                    io.mode = cfg.electrical.open_drain ? GPIO_MODE_OUTPUT_OD : GPIO_MODE_OUTPUT;
+                    break;
+                case Mode::Alternate:
+                case Mode::Analog:
+                    // Not directly expressed; leave as input and rely on iomux if set elsewhere
+                    io.mode = GPIO_MODE_INPUT;
+                    break;
+                }
+                switch (cfg.pull)
+                {
+                case Pull::None:
+                    io.pull_up_en = GPIO_PULLUP_DISABLE;
+                    io.pull_down_en = GPIO_PULLDOWN_DISABLE;
+                    break;
+                case Pull::Up:
+                    io.pull_up_en = GPIO_PULLUP_ENABLE;
+                    io.pull_down_en = GPIO_PULLDOWN_DISABLE;
+                    break;
+                case Pull::Down:
+                    io.pull_up_en = GPIO_PULLUP_DISABLE;
+                    io.pull_down_en = GPIO_PULLDOWN_ENABLE;
+                    break;
+                }
+                gpio_config(&io);
+            }
+
+            gpio_num_t gpio_;
+            Callback cb_{};
+            RtosQueue<Event> *queue_ = nullptr;
+            uint32_t debounce_us_ = 0;
+            uint64_t last_isr_us_ = 0;
+            uint32_t isr_count_ = 0;
+
+        public:
+            // Back-end hooks to be provided by your RTOS layer so we keep this file
+            // free from queue/task headers.
+            static void backend_queue_send_from_isr(RtosQueue<Event> *q, const Event &ev);
+            static void backend_defer_to_task(std::function<void()> fn);
+        };
+
+        extern "C" void gpio_isr_trampoline(void *arg)
+        {
+            auto *self = static_cast<EspIdfImpl *>(arg);
+            self->isr_handler();
+        }
+
+        // Default weak hooks — user must provide real implementations in rtos glue
+        // void EspIdfImpl::backend_queue_send_from_isr(RtosQueue<Event> *, const Event &) __attribute__((weak));
+        // void EspIdfImpl::backend_defer_to_task(std::function<void()>) __attribute__((weak));
+        void EspIdfImpl::backend_queue_send_from_isr(RtosQueue<Event> *, const Event &) {}
+        void EspIdfImpl::backend_defer_to_task(std::function<void()>) {}
+
+        // Factory for ESP-IDF
+        Pin Pin::make(int pin_id, const Config &cfg)
+        {
+            EspIdfImpl::ensure_isr_service();
+            int gpio = -1;
+            if (pin_id >= 0 && pin_id < (int)(sizeof(kPinMap) / sizeof(kPinMap[0])))
+                gpio = kPinMap[pin_id];
+            if (gpio < 0)
+            {
+                Pin p;
+                return p;
+            }
+            auto *impl = new EspIdfImpl(gpio, cfg);
+            Pin p;
+            p.impl_ = impl;
+            p.id_ = pin_id;
+            p.cfg_ = cfg;
+            impl->logical_id_ = pin_id;
+            // Register ISR
+            gpio_isr_handler_add(static_cast<gpio_num_t>(gpio), gpio_isr_trampoline, impl);
+            return p;
+        }
+
+        void Pin::reconfigure(const Config &cfg)
+        {
+            cfg_ = cfg;
+            static_cast<EspIdfImpl *>(impl_)->reconfigure(cfg);
+        }
+        bool Pin::read() const { return static_cast<EspIdfImpl *>(impl_)->read(); }
+        void Pin::write(bool l) { static_cast<EspIdfImpl *>(impl_)->write(l); }
+        void Pin::toggle() { static_cast<EspIdfImpl *>(impl_)->toggle(); }
+        void Pin::enable_interrupt(Trigger t) { static_cast<EspIdfImpl *>(impl_)->enable_interrupt(t); }
+        void Pin::disable_interrupt() { static_cast<EspIdfImpl *>(impl_)->disable_interrupt(); }
+        void Pin::set_callback(Callback cb) { static_cast<EspIdfImpl *>(impl_)->set_callback(std::move(cb)); }
+        void Pin::attach_queue(RtosQueue<Event> *q) { static_cast<EspIdfImpl *>(impl_)->attach_queue(q); }
+        void Pin::set_debounce_us(uint32_t us) { static_cast<EspIdfImpl *>(impl_)->set_debounce_us(us); }
+
     }
 }
