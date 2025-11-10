@@ -2,11 +2,12 @@
 
 #include <stdio.h>
 #include <esp_timer.h>
+#include "time.hpp"
 
 #define PRINT_FLOAT(name, value, period) \
     {                                    \
         static float last = 0;           \
-        float now = esp_timer_get_time() * 1e-6; \
+        float now = (float) (1e-6 * rtos::time::now_ms().count()); \
         if (now - last > period)          \
         {                                \
             last = now;                  \
@@ -14,13 +15,10 @@
         }                                \
     }
 
-#define get_time_in_milliseconds() (esp_timer_get_time() * 1e-3)
-#define get_time_in_seconds() (esp_timer_get_time() * 1e-6)
-
 #define RUN_CODE_EVERY_START(period) \
     {                                 \
         static float last = 0;            \
-        float now = get_time_in_seconds(); \
+        float now = (float) (1e-6 * rtos::time::now_ms().count()); \
         if (now - last > period)          \
         {                                 \
             last = now;
