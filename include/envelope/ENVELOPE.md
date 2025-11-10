@@ -9,12 +9,15 @@ Header-only C++14 library for **validating values** (scalars or arrays) **agains
 * **Portable time policy:** floating-point seconds or wrap-safe unsigned tick counters.
 
 ---
+
 ## 1 Envelope System Quick Starts
 
 Below are several small, copy‑pasteable ways to wire up the envelope/limit checker. Each snippet uses `float` values and `SecondsTime` unless noted.
 
 ---
+
 ### 1.1 Minimal: single rule
+
 ```cpp
 #include "envelope.hpp"
 using Seconds = envelope::SecondsTime;
@@ -32,6 +35,7 @@ int main() {
 ```
 
 ---
+
 ### 1.2 Multiple mixed rules (type‑erased `Envelope`)
 
 Bind order = priority (index 0 wins if several would fire the same tick).
@@ -148,7 +152,9 @@ Result r = env.update(value, t);
 ```
 
 ---
+
 ### 1.8 Reset between sessions
+
 Clear debounce state on rules (and arrays of rules).
 
 ```cpp
@@ -162,6 +168,7 @@ w.reset(); // or for typed aggregators with many rules: env.reset_all();
 ```
 
 ---
+
 ### 1.9 Custom rule (any callable that matches the signature)
 
 You can plug in your own struct/lambda as long as it exposes `bool operator()(T, Time::rep)` and (optionally) `reset()`.
@@ -180,6 +187,7 @@ envelope::Envelope<float,1,envelope::SecondsTime> env{}; env.bind(0, sw);
 ```
 
 ---
+
 ### 1.10 Inclusive vs exclusive bounds
 
 All rules accept `Bounds<true>` to make edges inclusive.
@@ -191,6 +199,7 @@ closed.lo = 0.0f; closed.hi = 1.0f;
 ```
 
 ---
+
 ## 2 Core concepts
 
 ### 2.1 Rules
