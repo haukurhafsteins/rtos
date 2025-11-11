@@ -42,6 +42,7 @@ public:
     virtual TypeId typeId() const = 0;
     virtual int toJson(std::span<char> json, const std::span<const std::byte> buffer, const char *format) const = 0;
     virtual int toJson(std::span<char> json) const = 0;
+    virtual bool requestWrite(const std::string_view &json) = 0;
     [[nodiscard]] virtual size_t notify() = 0;
 
     /// @brief Add a subscriber to the topic.
@@ -93,6 +94,21 @@ public:
             h *= 0x01000193u;
         }
         return static_cast<TopicId>(h);
+    }
+
+    static bool fromJsonBool(const std::string_view &json, bool &outValue)
+    {
+        if (json == "true" || json == "1")
+        {
+            outValue = true;
+            return true;
+        }
+        else if (json == "false" || json == "0")
+        {
+            outValue = false;
+            return true;
+        }
+        return false;
     }
 
     TopicId getId() const { return topicId; }
@@ -183,7 +199,7 @@ public:
         return _writeCb(value);
     }
 
-    bool requestWrite(const std::string_view &json)
+    bool requestWrite(const std::string_view &json) override
     {
         if (!_fromJsonCb)
             return false; // writes not supported for this topic
@@ -377,6 +393,14 @@ public:
         if (topicId == 0)
             return Result::TOPIC_NOT_FOUND;
         return requestWrite<T>(topicId, value);
+    }
+
+    static Result requestWrite(const TopicId topicId, const std::string_view json)
+    {
+        TopicBase *topic = findTopic(topicId);
+        if (!topic)
+            return Result::TOPIC_NOT_FOUND;
+        return topic->requestWrite(json) ? Result::OK : Result::WRITE_FAILED;
     }
 
     /// @brief Get a JSON representation of the topic's payload.
