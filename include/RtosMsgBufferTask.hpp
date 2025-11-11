@@ -2,11 +2,9 @@
 
 #include "RtosMsgBuffer.hpp"
 #include "RtosTask.hpp"
-#include "rtosutils.h"
 #include "time.hpp"
 
-using rtos::time::Millis;
-using rtos::time::now_ms;
+using namespace rtos::time;
 
 constexpr Millis RTOS_TASK_WAIT_FOREVER = Millis::max();
 
@@ -35,14 +33,14 @@ public:
     IRtosMsgReceiver &getMsgReceiver() { return *this; }
 
 protected:
-    bool send(const void *data, size_t len) 
+    bool send(const void *data, size_t len)
     {
-        if (len > MaxMsgSize) 
+        if (len > MaxMsgSize)
         {
             printf("ERROR: RtosMsgBufferTask::send: message size %zu exceeds max %zu\n", len, MaxMsgSize);
             return false;
         }
-        return _msgQueue.send(data, len, _sendTimeoutMs); 
+        return _msgQueue.send(data, len, _sendTimeoutMs);
     }
     virtual void taskEntry() {}
     virtual void handleMessage(std::span<const std::byte> data) = 0;
@@ -50,39 +48,98 @@ protected:
     virtual void handleTimeoutError() {}
 
 private:
-    static void TaskEntry(void* p) { static_cast<RtosMsgBufferTask*>(p)->taskLoop(); }
+    static void TaskEntry(void *p) { static_cast<RtosMsgBufferTask *>(p)->taskLoop(); }
 
     void taskLoop()
     {
-        Millis timeoutTimeMs = _receiveTimeoutMs;
+        using Clock = HighResClock;
+
+        auto to_millis = [](auto d)
+        { return std::chrono::duration_cast<Millis>(d); };
+
         taskEntry();
+
+        Millis period = _receiveTimeoutMs;
+        bool has_deadline = (period != RTOS_TASK_WAIT_FOREVER);
+        Clock::time_point next_deadline = has_deadline ? (Clock::now() + std::chrono::duration_cast<Clock::duration>(period))
+                                                       : Clock::time_point{};
+
         while (true)
         {
-            if (_receiveTimeoutMs == RTOS_TASK_WAIT_FOREVER)
+            // Compute wait for receive()
+            Millis wait_ms = RTOS_TASK_WAIT_FOREVER;
+            if (has_deadline)
             {
-                size_t len = _msgQueue.receive(_msg, sizeof(_msg), _receiveTimeoutMs);
-                std::span<const std::byte> data{reinterpret_cast<const std::byte*>(_msg), len};
-                handleMessage(data);
+                auto now = Clock::now();
+                auto wait = std::chrono::duration_cast<Millis>(next_deadline - now);
+                if (wait < Millis::zero())
+                    wait = Millis::zero(); // already late; don't block
+                wait_ms = wait;
             }
-            else
+
+            size_t len = _msgQueue.receive(_msg, sizeof(_msg), wait_ms);
+            std::span<const std::byte> data{reinterpret_cast<const std::byte *>(_msg), len};
+
+            if (len > 0)
             {
-                Millis startTimeMs = now_ms();
-                size_t len = _msgQueue.receive(_msg, sizeof(_msg), _receiveTimeoutMs);
-                std::span<const std::byte> data{reinterpret_cast<const std::byte*>(_msg), len};
-                if (len > 0)
+                // Message arrived before (or at) the deadline
+                handleMessage(data);
+
+                // The handler may change the timeout policy; re-read and adjust.
+                Millis new_period = _receiveTimeoutMs;
+                if (new_period == RTOS_TASK_WAIT_FOREVER)
                 {
-                    handleMessage(data);
+                    has_deadline = false; // switch to blocking mode
                 }
-                else
-                    handleTimeout();
-                Millis endTimeMs = now_ms();
-                timeoutTimeMs = _receiveTimeoutMs - (endTimeMs - startTimeMs);
-                if (timeoutTimeMs < Millis(0))
+                else if (!has_deadline || new_period != period)
+                {
+                    has_deadline = true;
+                    period = new_period;
+                    next_deadline = Clock::now() + std::chrono::duration_cast<Clock::duration>(period); // restart cadence from now
+                }
+                // If unchanged, keep the existing next_deadline
+                continue;
+            }
+
+            // receive() timed out (only when has_deadline == true)
+            if (has_deadline)
+            {
+                handleTimeout();
+
+                auto after = Clock::now();
+                Millis new_period = _receiveTimeoutMs;
+
+                if (new_period == RTOS_TASK_WAIT_FOREVER)
+                {
+                    has_deadline = false; // switch to blocking
+                    continue;
+                }
+
+                if (new_period != period)
+                {
+                    // Period changed during handler: restart cadence from 'after'
+                    period = new_period;
+                    next_deadline = after + std::chrono::duration_cast<Clock::duration>(period);
+                    continue;
+                }
+
+                // Same period: advance schedule and detect overruns (no drift)
+                if (after > next_deadline)
                 {
                     handleTimeoutError();
-                    timeoutTimeMs = _receiveTimeoutMs;
+
+                    // Compute how far behind we are and jump forward by whole periods
+                    Millis behind_ms = to_millis(after - next_deadline);
+                    // Number of whole periods missed (>=1)
+                    auto k = static_cast<int64_t>(behind_ms.count() / period.count()) + 1;
+                    next_deadline += std::chrono::duration_cast<Clock::duration>(period * k);
+                }
+                else
+                {
+                    next_deadline += std::chrono::duration_cast<Clock::duration>(period);
                 }
             }
+            // In blocking mode, timeouts don’t occur.
         }
     }
 
