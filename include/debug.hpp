@@ -4,23 +4,23 @@
 #include <esp_timer.h>
 #include "time.hpp"
 
-#define PRINT_FLOAT_EVERY_MS(name, value, period) \
+#define PRINT_FLOAT_EVERY_MS(_dbg_name, _dbg_value, _dbg_period) \
     {                                    \
-        static Millis last = Millis(0);           \
-        Millis now = rtos::time::now_ms(); \
-        if (now - last > Millis(period)) \
+        static Millis _dbg_last = Millis(0);           \
+        Millis _dbg_now = rtos::time::now_ms(); \
+        if (_dbg_now - _dbg_last > Millis(static_cast<long long>(_dbg_period))) \
         {                                \
-            last = now;                  \
-            printf(name, value);          \
+            _dbg_last = _dbg_now;                  \
+            printf(_dbg_name, _dbg_value);          \
         }                                \
     }
 
-#define RUN_CODE_EVERY_MS(period) \
+#define RUN_CODE_EVERY_MS(_dbg_period) \
     {                                 \
-        static Millis last = Millis(0);  \
-        Millis now = rtos::time::now_ms(); \
-        if (now - last > Millis(period))  \
+        static Millis _dbg_last = Millis(0);  \
+        Millis _dbg_now = rtos::time::now_ms(); \
+        if (_dbg_now - _dbg_last > Millis(static_cast<long long>(_dbg_period)))  \
         {                                 \
-            last = now;
+            _dbg_last = _dbg_now;
 
 #define RUN_CODE_EVERY_END() }}
