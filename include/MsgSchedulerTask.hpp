@@ -7,8 +7,8 @@
 #include <cstring>
 #include <list>
 #include <algorithm>
-#include "esp_timer.h"
-#include "rtos/QMsg.hpp"
+#include "QMsg.hpp"
+#include "time.hpp"
 
 using namespace std::chrono;
 
@@ -83,9 +83,9 @@ public:
     }
 
 protected:
-    void handleMessage(const void *data, size_t len) override
+    void handleMessage(std::span<const std::byte> data) override
     {
-        QMsg<SchedulerCmd, SMsg*> *msg = (QMsg<SchedulerCmd, SMsg*> *)data;
+        QMsg<SchedulerCmd, SMsg*> *msg = (QMsg<SchedulerCmd, SMsg*> *)data.data();
         switch (msg->cmd)
         {
             case SchedulerCmd::add:
@@ -141,7 +141,7 @@ private:
         {
             uint64_t delay = (_list.front()->nextTime > current) ?
                 (_list.front()->nextTime - current) : 0;
-            receiveTimeout(static_cast<uint32_t>(delay));
+            receiveTimeout(Millis(delay));
         }
         else
         {
