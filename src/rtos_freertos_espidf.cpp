@@ -18,10 +18,9 @@ extern "C"
 #include "freertos/portmacro.h"
 }
 
-#include "esp_timer.h"
+#include <esp_timer.h>
 #include <esp_log.h>
 #include <driver/gpio.h>
-#include <esp_timer.h>
 
 static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -554,7 +553,6 @@ void EspIdfLogSink::write(LogLevel level, const char *tag, const char *msg, size
 //-----------------------------------------------------------------------------
 
 #include <driver/gpio.h>
-#include <esp_timer.h>
 #include <cstdlib>
 #include <cstring>
 
