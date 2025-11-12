@@ -5,5 +5,5 @@ idf_component_register(
         "." "include" "include/statistics" "include/envelope"
     REQUIRES
         # other components you need (e.g. freertos, driver, esp_timer)
-        driver
+        driver esp_timer
 )
