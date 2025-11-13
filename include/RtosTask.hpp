@@ -34,9 +34,16 @@ public:
 
     ~RtosTask() { stop(); }
 
-    bool start() noexcept {
+    /// @brief Start the task on the specified core (or any core if core_id is TASK_NO_AFFINITY)
+    /// @param core_id Core ID to pin the task to, or TASK_NO_AFFINITY to allow any core
+    /// @return true if the task was started successfully, false if it was already started
+    bool start(int core_id = TASK_NO_AFFINITY) noexcept {
         if (_started) return false;
-        bool ok = rtos::backend::task_create(_handle, _name, _stack_size_bytes, _priority, _func, _arg);
+        bool ok = false;
+        if (core_id == TASK_NO_AFFINITY)
+            ok = rtos::backend::task_create(_handle, _name, _stack_size_bytes, _priority, _func, _arg);
+        else
+            ok = rtos::backend::task_create_pinned(_handle, _name, _stack_size_bytes, _priority, core_id, _func, _arg);
         _started = ok;
         return ok;
     }
@@ -59,6 +66,7 @@ public:
     /// @brief Get the handle of the currently running task
     /// @return Handle of the currently running task
     static rtos::backend::TaskHandle current() noexcept { return rtos::backend::current_task(); }
+    constexpr static int TASK_NO_AFFINITY = -1;
 
 private:
     void move_from(RtosTask&& other) noexcept {

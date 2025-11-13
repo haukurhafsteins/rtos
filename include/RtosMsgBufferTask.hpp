@@ -27,7 +27,7 @@ public:
         _sendTimeoutMs = RTOS_TASK_WAIT_FOREVER;
     }
 
-    void start() { _task.start(); }
+    void start(int core_id = RtosTask::TASK_NO_AFFINITY) { _task.start(core_id); }
     void receiveTimeout(Millis timeoutMs) { _receiveTimeoutMs = timeoutMs; }
     void sendTimeout(Millis timeoutMs) { _sendTimeoutMs = timeoutMs; }
     IRtosMsgReceiver &getMsgReceiver() { return *this; }
