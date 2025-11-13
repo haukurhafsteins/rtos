@@ -15,6 +15,7 @@ namespace rtos::backend
     // ===== Task backend (already present) =====
     using TaskHandle = void *;
     bool task_create(TaskHandle &out_handle, const char *name, uint32_t stack_size_bytes, uint32_t priority, TaskFunction func, void *arg) noexcept;
+    bool task_create_pinned(TaskHandle &out_handle, const char *name, uint32_t stack_size_bytes, uint32_t priority, int core_id, TaskFunction func, void *arg) noexcept;
     void task_delete(TaskHandle handle) noexcept;
     void delay_ms(Millis duration) noexcept;
     void yield() noexcept;
