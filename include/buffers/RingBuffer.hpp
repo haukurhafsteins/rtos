@@ -176,6 +176,27 @@ public:
     std::size_t elementsBytes() const noexcept { return _count * sizeof(T); }
     std::size_t elements() const noexcept { return _count; }
 
+    bool toJson(std::span<char> buf, std::size_t count) const {
+        LockGuard<LockPolicy> g;
+        if (count > _count)
+            return false;
+
+        size_t offset = 0;
+        offset += snprintf(buf.data() + offset, buf.size() - offset, "[");
+
+        // Start for newest to oldest
+        for (size_t i = 0; i < count; i++)
+        {
+            const T& val = getRecent(i);
+            offset += snprintf(buf.data() + offset, buf.size() - offset, "%.6g", static_cast<double>(val));
+            if (i < count - 1)
+                offset += snprintf(buf.data() + offset, buf.size() - offset, ",");
+        }
+
+        snprintf(buf.data() + offset, buf.size() - offset, "]");
+        return true;
+    }
+
 private:
     // helpers
     std::size_t next(std::size_t i) const noexcept { return (i + 1) % _capacity; }
