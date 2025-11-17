@@ -176,10 +176,10 @@ public:
     std::size_t elementsBytes() const noexcept { return _count * sizeof(T); }
     std::size_t elements() const noexcept { return _count; }
 
-    bool toJson(std::span<char> buf, std::size_t count) const {
+    int toJson(std::span<char> buf, std::size_t count) const {
         LockGuard<LockPolicy> g;
         if (count > _count)
-            return false;
+            return -1;
 
         size_t offset = 0;
         offset += snprintf(buf.data() + offset, buf.size() - offset, "[");
@@ -192,9 +192,9 @@ public:
             if (i < count - 1)
                 offset += snprintf(buf.data() + offset, buf.size() - offset, ",");
         }
-
-        snprintf(buf.data() + offset, buf.size() - offset, "]");
-        return true;
+        
+        offset += snprintf(buf.data() + offset, buf.size() - offset, "]");
+        return static_cast<int>(offset);
     }
 
 private:
