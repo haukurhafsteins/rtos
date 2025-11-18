@@ -176,7 +176,7 @@ public:
     std::size_t elementsBytes() const noexcept { return _count * sizeof(T); }
     std::size_t elements() const noexcept { return _count; }
 
-    int toJson(std::span<char> buf, std::size_t count) const {
+    int toJson(std::span<char> buf, std::size_t count, const std::string& format = "%.6g") const {
         LockGuard<LockPolicy> g;
         if (count > _count)
             return -1;
@@ -187,7 +187,7 @@ public:
         // Start for newest to oldest
         for (size_t i = 0; i < count; i++)
         {
-            const T& val = getRecent(i);
+            const T& val = getRecent(count - 1 - i);
             offset += snprintf(buf.data() + offset, buf.size() - offset, "%.6g", static_cast<double>(val));
             if (i < count - 1)
                 offset += snprintf(buf.data() + offset, buf.size() - offset, ",");
