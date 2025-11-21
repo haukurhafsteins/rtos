@@ -33,7 +33,8 @@ public:
     IRtosMsgReceiver &getMsgReceiver() { return *this; }
 
 protected:
-    bool send(const void *data, size_t len)
+    bool send(const void *data, size_t len) { return send(data, len, _sendTimeoutMs); }
+    bool send(const void *data, size_t len, Millis timeoutMs)
     {
         if (len > MaxMsgSize)
         {
