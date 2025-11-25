@@ -31,7 +31,7 @@ public:
             if (!format) format = "%f";
             char fmtBuf[128];
             int n = snprintf(fmtBuf, sizeof(fmtBuf),
-                             "{\"min\":%s, \"avg\":%s, \"max\":%s, \"count\":%u}",
+                             "{\"min\":%s,\"avg\":%s,\"max\":%s,\"count\":%u}",
                              format, format, format, stats.count);
             if (n < 0 || n >= (int)sizeof(fmtBuf))
                 return -1;
@@ -71,7 +71,7 @@ public:
                 stats.max = v;
         }
         sum_ += (SumT)v;
-        ++stats.count;
+        stats.count++;
     }
 
     inline void addMany(const T *data, size_t n)
@@ -98,6 +98,7 @@ public:
         out.min = getMin();
         out.avg = getAvg();
         out.max = getMax();
+        out.count = getCount();
         return true;
     }
 
