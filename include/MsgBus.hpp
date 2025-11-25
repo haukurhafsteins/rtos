@@ -413,7 +413,7 @@ public:
         const TopicBase *topic = findTopic(topicId);
         if (!topic)
             return Result::TOPIC_NOT_FOUND;
-        if (topic->toJson(json, buffer, topic->getFormat().c_str()) > 0)
+        if (topic->toJson(json, buffer, nullptr))//TODO: format doesnt exist for some parameters. topic->getFormat().c_str()) > 0)
             return Result::OK;
         return Result::JSON_PARSE_FAILED;
     }
@@ -449,7 +449,10 @@ public:
             return "WRITE_NOT_SUPPORTED";
         case Result::WRITE_FAILED:
             return "WRITE_FAILED";
+        case Result::JSON_PARSE_FAILED:
+            return "JSON_PARSE_FAILED";
         default:
+            printf("MsgBus::resultToString: Unknown result %d\n", static_cast<int>(r));
             return "UNKNOWN";
         }
     }
