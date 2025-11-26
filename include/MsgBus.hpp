@@ -202,7 +202,10 @@ public:
     bool requestWrite(const std::string_view &json) override
     {
         if (!_fromJsonCb)
+        {
+            printf("Topic::requestWrite: topic %s, no fromJsonCb set\n", _name.data());
             return false; // writes not supported for this topic
+        }
         T value;
         if (!_fromJsonCb(json, value))
             return false;
@@ -254,6 +257,45 @@ public:
         if (written < 0 || static_cast<size_t>(written) >= json.size())
             return -1;
         return written;
+    }
+
+    static bool fromJsonFloat(const std::string_view &json, float &outValue)
+    {
+        try
+        {
+            outValue = std::stof(std::string(json));
+            return true;
+        }
+        catch (const std::exception &)
+        {
+            return false;
+        }
+    }
+    static bool fromJsonInt(const std::string_view &json, int &outValue)
+    {
+        try
+        {
+            outValue = std::stoi(std::string(json));
+            return true;
+        }
+        catch (const std::exception &)
+        {
+            return false;
+        }
+    }
+    static bool fromJsonBool(const std::string_view &json, bool &outValue)
+    {
+        if (json == "true" || json == "1")
+        {
+            outValue = true;
+            return true;
+        }
+        else if (json == "false" || json == "0")
+        {
+            outValue = false;
+            return true;
+        }
+        return false;
     }
 
 private:
