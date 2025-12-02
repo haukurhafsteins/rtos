@@ -85,6 +85,11 @@ public:
 
     constexpr static TopicId INVALID_TOPIC_ID = 0;
 
+    /// @brief Compile-time FNV-1a 32-bit hash function for string literals.
+    /// Used to generate unique topic IDs from topic names. The resulting
+    /// IDs start from 100000 to avoid low-numbered IDs.
+    /// @param s The string literal to hash.
+    /// @return The computed TopicId starting from 100000.
     static constexpr TopicId fnv1a32(std::string_view s)
     {
         uint32_t h = 0x811C9DC5u;
@@ -93,7 +98,10 @@ public:
             h ^= c;
             h *= 0x01000193u;
         }
-        return static_cast<TopicId>(h);
+        uint32_t id = h + 100000u;
+        if (id < 100000u)
+            id += 100000u; // fix overflow wrap
+        return static_cast<TopicId>(id);
     }
 
     static bool fromJsonBool(const std::string_view &json, bool &outValue)
@@ -237,6 +245,7 @@ public:
         return _toJsonCb(msg.data, json, nullptr);
     }
 
+    [[nodiscard]]
     static int toJsonFloat(const float &data, std::span<char> json, const char *format)
     {
         int written = snprintf(json.data(), json.size(), format ? format : "%f", static_cast<float>(data));
@@ -244,6 +253,31 @@ public:
             return -1;
         return written;
     }
+    [[nodiscard]]
+    static int toJsonFloatArray(const std::span<float> &data, std::span<char> json, const char *format)
+    {
+        snprintf(json.data(), json.size(), "[");
+        size_t offset = 1;
+        for (size_t i = 0; i < data.size(); i++)
+        {
+            int written = snprintf(json.data() + offset, json.size() - offset, format ? format : "%f", static_cast<float>(data[i]));
+            if (written < 0 || static_cast<size_t>(written) >= json.size() - offset)
+                return -1;
+            offset += static_cast<size_t>(written);
+            if (i < data.size() - 1)
+            {
+                written = snprintf(json.data() + offset, json.size() - offset, ",");
+                if (written < 0 || static_cast<size_t>(written) >= json.size() - offset)
+                    return -1;
+                offset += static_cast<size_t>(written);
+            }
+        }
+        int written = snprintf(json.data() + offset, json.size() - offset, "]");
+        if (written < 0 || static_cast<size_t>(written) >= json.size() - offset)
+            return -1;
+        return written;
+    }
+    [[nodiscard]]
     static int toJsonInt(const int &data, std::span<char> json, const char *format)
     {
         int written = snprintf(json.data(), json.size(), "%d", static_cast<int>(data));
@@ -251,6 +285,7 @@ public:
             return -1;
         return written;
     }
+    [[nodiscard]]
     static int toJsonBool(const bool &data, std::span<char> json, const char *format)
     {
         int written = snprintf(json.data(), json.size(), "%s", data ? "true" : "false");
@@ -455,7 +490,7 @@ public:
         const TopicBase *topic = findTopic(topicId);
         if (!topic)
             return Result::TOPIC_NOT_FOUND;
-        if (topic->toJson(json, buffer, nullptr))//TODO: format doesnt exist for some parameters. topic->getFormat().c_str()) > 0)
+        if (topic->toJson(json, buffer, nullptr)) // TODO: format doesnt exist for some parameters. topic->getFormat().c_str()) > 0)
             return Result::OK;
         return Result::JSON_PARSE_FAILED;
     }
