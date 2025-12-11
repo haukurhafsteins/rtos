@@ -130,6 +130,20 @@ public:
         return subscribers_.size();
     }
 
+    void print(const char *prefix = nullptr) const
+    {
+        std::lock_guard<std::mutex> lk(subs_mtx_);
+        if (prefix)
+        {
+            printf("%s", prefix);
+        }
+        printf("Topic %s (id: %lu) has %zu subscribers:\n", _name.data(), topicId, subscribers_.size());
+        for (const auto &s : subscribers_)
+        {
+            printf("  Subscriber queue: %p, topicId: %lu\n", s.q, s.id);
+        }
+    }
+
 protected:
     struct Sub
     {
@@ -385,6 +399,7 @@ public:
     {
         if (!topic)
             return Result::ZERO_TOPIC;
+        topic->print("Registering topic: ");
         std::lock_guard<std::mutex> lock(mutex_);
         auto name = std::string(topic->getName());
         auto topicHandle = TopicBase::fnv1a32(name);
