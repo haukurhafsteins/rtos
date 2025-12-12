@@ -208,6 +208,12 @@ public:
     /// @return Reference to the topic data.
     T &data() { return msg.getData(); }
 
+    /// @brief Reset the topic data to default-constructed value.
+    void resetData()
+    {
+        msg.data = T{};
+    }
+
     /// @brief Request a write to the topic. Returns false if writes are not
     /// supported or if the write callback returns false.
     /// @param value Payload value
