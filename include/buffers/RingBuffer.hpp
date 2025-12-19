@@ -88,7 +88,13 @@ public:
         for (std::size_t i = 0; i < n; ++i) {
             _data[_head] = values[i];
             _head = next(_head);
-            ++_count;
+        }
+        // Keep count bounded so tail calculations stay valid when we overwrite
+        if (n >= _capacity) {
+            _count = _capacity;
+        } else {
+            const std::size_t newCount = _count + n;
+            _count = newCount > _capacity ? _capacity : newCount;
         }
     }
 
