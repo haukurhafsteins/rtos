@@ -82,6 +82,16 @@ public:
         if (_count < _capacity) ++_count;
     }
 
+    void write(const T* values, std::size_t n) noexcept {
+        LockGuard<LockPolicy> g;
+        assert(_capacity && _data);
+        for (std::size_t i = 0; i < n; ++i) {
+            _data[_head] = values[i];
+            _head = next(_head);
+            ++_count;
+        }
+    }
+
     // FIFO pop. Returns false if empty.
     bool pop(T& out) noexcept {
         LockGuard<LockPolicy> g;
