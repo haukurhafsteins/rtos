@@ -85,6 +85,11 @@ public:
 
     constexpr static TopicId INVALID_TOPIC_ID = 0;
 
+    /// @brief Compile-time FNV-1a 32-bit hash function for string literals.
+    /// Used to generate unique topic IDs from topic names. The resulting
+    /// IDs start from 100000 to avoid low-numbered IDs.
+    /// @param s The string literal to hash.
+    /// @return The computed TopicId starting from 100000.
     static constexpr TopicId fnv1a32(std::string_view s)
     {
         uint32_t h = 0x811C9DC5u;
@@ -93,7 +98,10 @@ public:
             h ^= c;
             h *= 0x01000193u;
         }
-        return static_cast<TopicId>(h);
+        uint32_t id = h + 100000u;
+        if (id < 100000u)
+            id += 100000u; // fix overflow wrap
+        return static_cast<TopicId>(id);
     }
 
     static bool fromJsonBool(const std::string_view &json, bool &outValue)
@@ -120,6 +128,20 @@ public:
     {
         std::lock_guard<std::mutex> lk(subs_mtx_);
         return subscribers_.size();
+    }
+
+    void print(const char *prefix = nullptr) const
+    {
+        std::lock_guard<std::mutex> lk(subs_mtx_);
+        if (prefix)
+        {
+            printf("%s", prefix);
+        }
+        printf("Topic %s (id: %lu) has %zu subscribers:\n", _name.data(), topicId, subscribers_.size());
+        for (const auto &s : subscribers_)
+        {
+            printf("  Subscriber queue: %p, topicId: %lu\n", s.q, s.id);
+        }
     }
 
 protected:
@@ -186,6 +208,12 @@ public:
     /// @return Reference to the topic data.
     T &data() { return msg.getData(); }
 
+    /// @brief Reset the topic data to default-constructed value.
+    void resetData()
+    {
+        msg.data = T{};
+    }
+
     /// @brief Request a write to the topic. Returns false if writes are not
     /// supported or if the write callback returns false.
     /// @param value Payload value
@@ -202,7 +230,10 @@ public:
     bool requestWrite(const std::string_view &json) override
     {
         if (!_fromJsonCb)
+        {
+            printf("Topic::requestWrite: topic %s, no fromJsonCb set\n", _name.data());
             return false; // writes not supported for this topic
+        }
         T value;
         if (!_fromJsonCb(json, value))
             return false;
@@ -234,6 +265,7 @@ public:
         return _toJsonCb(msg.data, json, nullptr);
     }
 
+    [[nodiscard]]
     static int toJsonFloat(const float &data, std::span<char> json, const char *format)
     {
         int written = snprintf(json.data(), json.size(), format ? format : "%f", static_cast<float>(data));
@@ -241,6 +273,31 @@ public:
             return -1;
         return written;
     }
+    [[nodiscard]]
+    static int toJsonFloatArray(const std::span<float> &data, std::span<char> json, const char *format)
+    {
+        snprintf(json.data(), json.size(), "[");
+        size_t offset = 1;
+        for (size_t i = 0; i < data.size(); i++)
+        {
+            int written = snprintf(json.data() + offset, json.size() - offset, format ? format : "%f", static_cast<float>(data[i]));
+            if (written < 0 || static_cast<size_t>(written) >= json.size() - offset)
+                return -1;
+            offset += static_cast<size_t>(written);
+            if (i < data.size() - 1)
+            {
+                written = snprintf(json.data() + offset, json.size() - offset, ",");
+                if (written < 0 || static_cast<size_t>(written) >= json.size() - offset)
+                    return -1;
+                offset += static_cast<size_t>(written);
+            }
+        }
+        int written = snprintf(json.data() + offset, json.size() - offset, "]");
+        if (written < 0 || static_cast<size_t>(written) >= json.size() - offset)
+            return -1;
+        return written;
+    }
+    [[nodiscard]]
     static int toJsonInt(const int &data, std::span<char> json, const char *format)
     {
         int written = snprintf(json.data(), json.size(), "%d", static_cast<int>(data));
@@ -248,12 +305,52 @@ public:
             return -1;
         return written;
     }
+    [[nodiscard]]
     static int toJsonBool(const bool &data, std::span<char> json, const char *format)
     {
         int written = snprintf(json.data(), json.size(), "%s", data ? "true" : "false");
         if (written < 0 || static_cast<size_t>(written) >= json.size())
             return -1;
         return written;
+    }
+
+    static bool fromJsonFloat(const std::string_view &json, float &outValue)
+    {
+        try
+        {
+            outValue = std::stof(std::string(json));
+            return true;
+        }
+        catch (const std::exception &)
+        {
+            return false;
+        }
+    }
+    static bool fromJsonInt(const std::string_view &json, int &outValue)
+    {
+        try
+        {
+            outValue = std::stoi(std::string(json));
+            return true;
+        }
+        catch (const std::exception &)
+        {
+            return false;
+        }
+    }
+    static bool fromJsonBool(const std::string_view &json, bool &outValue)
+    {
+        if (json == "true" || json == "1")
+        {
+            outValue = true;
+            return true;
+        }
+        else if (json == "false" || json == "0")
+        {
+            outValue = false;
+            return true;
+        }
+        return false;
     }
 
 private:
@@ -308,6 +405,7 @@ public:
     {
         if (!topic)
             return Result::ZERO_TOPIC;
+        topic->print("Registering topic: ");
         std::lock_guard<std::mutex> lock(mutex_);
         auto name = std::string(topic->getName());
         auto topicHandle = TopicBase::fnv1a32(name);
@@ -413,7 +511,7 @@ public:
         const TopicBase *topic = findTopic(topicId);
         if (!topic)
             return Result::TOPIC_NOT_FOUND;
-        if (topic->toJson(json, buffer, topic->getFormat().c_str()) > 0)
+        if (topic->toJson(json, buffer, nullptr)) // TODO: format doesnt exist for some parameters. topic->getFormat().c_str()) > 0)
             return Result::OK;
         return Result::JSON_PARSE_FAILED;
     }
@@ -449,7 +547,10 @@ public:
             return "WRITE_NOT_SUPPORTED";
         case Result::WRITE_FAILED:
             return "WRITE_FAILED";
+        case Result::JSON_PARSE_FAILED:
+            return "JSON_PARSE_FAILED";
         default:
+            printf("MsgBus::resultToString: Unknown result %d\n", static_cast<int>(r));
             return "UNKNOWN";
         }
     }

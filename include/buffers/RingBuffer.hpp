@@ -82,6 +82,22 @@ public:
         if (_count < _capacity) ++_count;
     }
 
+    void write(const T* values, std::size_t n) noexcept {
+        LockGuard<LockPolicy> g;
+        assert(_capacity && _data);
+        for (std::size_t i = 0; i < n; ++i) {
+            _data[_head] = values[i];
+            _head = next(_head);
+        }
+        // Keep count bounded so tail calculations stay valid when we overwrite
+        if (n >= _capacity) {
+            _count = _capacity;
+        } else {
+            const std::size_t newCount = _count + n;
+            _count = newCount > _capacity ? _capacity : newCount;
+        }
+    }
+
     // FIFO pop. Returns false if empty.
     bool pop(T& out) noexcept {
         LockGuard<LockPolicy> g;
@@ -203,6 +219,27 @@ public:
     std::size_t bufferBytes() const noexcept { return _capacity * sizeof(T); }
     std::size_t elementsBytes() const noexcept { return _count * sizeof(T); }
     std::size_t elements() const noexcept { return _count; }
+
+    int toJson(std::span<char> buf, std::size_t count, const std::string& format = "%.6g") const {
+        LockGuard<LockPolicy> g;
+        if (count > _count)
+            return -1;
+
+        size_t offset = 0;
+        offset += snprintf(buf.data() + offset, buf.size() - offset, "[");
+
+        // Start for newest to oldest
+        for (size_t i = 0; i < count; i++)
+        {
+            const T& val = getRecent(count - 1 - i);
+            offset += snprintf(buf.data() + offset, buf.size() - offset, "%.6g", static_cast<double>(val));
+            if (i < count - 1)
+                offset += snprintf(buf.data() + offset, buf.size() - offset, ",");
+        }
+        
+        offset += snprintf(buf.data() + offset, buf.size() - offset, "]");
+        return static_cast<int>(offset);
+    }
 
 private:
     // helpers
