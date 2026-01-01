@@ -114,10 +114,30 @@ public:
         return n;
     }
 
+    // Copy up to max items into out[] without popping. Returns number copied.
+    std::size_t copy_out(T* out, std::size_t max) const noexcept {
+        LockGuard<LockPolicy> g;
+        assert(_capacity && _data);
+        if (_count == 0 || max == 0) return 0;
+        std::size_t n = (_count < max) ? _count : max;
+
+        std::size_t tail = oldestIndexUnlocked();
+        std::size_t first = n;
+        std::size_t till_end = _capacity - tail;
+        if (first > till_end) first = till_end;
+
+        for (std::size_t i = 0; i < first; ++i) out[i] = _data[tail + i];
+
+        const std::size_t second = n - first;
+        for (std::size_t i = 0; i < second; ++i) out[first + i] = _data[i];
+
+        return n;
+    }
+
     // Peek a contiguous span without popping; returns {ptr,len}
     // Span may be shorter than size() if wrapped.
     std::pair<const T*, std::size_t> peek_span() const noexcept {
-        // read-only: no lock by default; add LockGuard if your platform needs it
+        LockGuard<LockPolicy> g;
         if (_count == 0) return {nullptr, 0};
         const std::size_t tail = oldestIndexUnlocked();
         if (_head > tail) return {&_data[tail], _head - tail};
@@ -132,33 +152,41 @@ public:
 
     // Oldest-first, bounds-checked random access (0..size()-1)
     T& operator[](std::size_t i) {
+        LockGuard<LockPolicy> g;
+        assert(_capacity && _data);
         if (i >= _count) throw std::out_of_range("RingBuffer index");
         return _data[(oldestIndexUnlocked() + i) % _capacity];
     }
     const T& operator[](std::size_t i) const {
+        LockGuard<LockPolicy> g;
+        assert(_capacity && _data);
         if (i >= _count) throw std::out_of_range("RingBuffer index");
         return _data[(oldestIndexUnlocked() + i) % _capacity];
     }
 
-    // Recent access (0 = most recent). Wraps around if idx >= size()
+    // Recent access (0 = most recent). Bounds-checked.
     const T& getRecent(std::size_t idx) const {
-        // If idx >= _count, wrap around by capacity
+        LockGuard<LockPolicy> g;
+        assert(_capacity && _data);
+        if (_count == 0 || idx >= _count) throw std::out_of_range("RingBuffer recent");
         const std::size_t pos = (_head + _capacity - 1 - idx) % _capacity;
         return _data[pos];
     }
     void setRecent(std::size_t idx, const T& value) {
         LockGuard<LockPolicy> g;
+        assert(_capacity && _data);
+        if (_count == 0 || idx >= _count) throw std::out_of_range("RingBuffer recent");
         const std::size_t pos = (_head + _capacity - 1 - idx) % _capacity;
         _data[pos] = value;
     }
 
     // Absolute access (wraps by capacity)
-    T&       getAt(std::size_t idx)       noexcept { return _data[idx % _capacity]; }
-    const T& getAt(std::size_t idx) const noexcept { return _data[idx % _capacity]; }
+    T&       getAt(std::size_t idx)       noexcept { LockGuard<LockPolicy> g; assert(_capacity && _data); return _data[idx % _capacity]; }
+    const T& getAt(std::size_t idx) const noexcept { LockGuard<LockPolicy> g; assert(_capacity && _data); return _data[idx % _capacity]; }
     void     setAt(std::size_t idx, const T& v) noexcept {
-        LockGuard<LockPolicy> g; _data[idx % _capacity] = v;
+        LockGuard<LockPolicy> g; assert(_capacity && _data); _data[idx % _capacity] = v;
     }
-    T*       getPointerAt(std::size_t idx) noexcept { return &_data[idx % _capacity]; }
+    T*       getPointerAt(std::size_t idx) noexcept { LockGuard<LockPolicy> g; assert(_capacity && _data); return &_data[idx % _capacity]; }
 
     // Oldest index (where pop will read next)
     std::size_t oldestIndex() const noexcept {
@@ -166,8 +194,8 @@ public:
     }
 
     // Last appended element (unchecked; asserts when empty)
-    T&       getLast()       { assert(_count); return _data[(_head + _capacity - 1) % _capacity]; }
-    const T& getLast() const { assert(_count); return _data[(_head + _capacity - 1) % _capacity]; }
+    T&       getLast()       { LockGuard<LockPolicy> g; assert(_count && _capacity && _data); return _data[(_head + _capacity - 1) % _capacity]; }
+    const T& getLast() const { LockGuard<LockPolicy> g; assert(_count && _capacity && _data); return _data[(_head + _capacity - 1) % _capacity]; }
 
     // Introspection
     std::size_t headIndex()   const noexcept { return _head; }
