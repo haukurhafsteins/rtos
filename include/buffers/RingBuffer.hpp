@@ -184,14 +184,14 @@ public:
     const T& getRecent(std::size_t idx) const {
         LockGuard<LockPolicy> g;
         assert(_capacity && _data);
-        if (_count == 0 || idx >= _count) throw std::out_of_range("RingBuffer recent");
+        //if (_count == 0 || idx >= _count) throw std::out_of_range("RingBuffer recent");
         const std::size_t pos = (_head + _capacity - 1 - idx) % _capacity;
         return _data[pos];
     }
     void setRecent(std::size_t idx, const T& value) {
         LockGuard<LockPolicy> g;
         assert(_capacity && _data);
-        if (_count == 0 || idx >= _count) throw std::out_of_range("RingBuffer recent");
+        //if (_count == 0 || idx >= _count) throw std::out_of_range("RingBuffer recent");
         const std::size_t pos = (_head + _capacity - 1 - idx) % _capacity;
         _data[pos] = value;
     }
