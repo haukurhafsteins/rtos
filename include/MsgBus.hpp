@@ -405,7 +405,9 @@ public:
     {
         if (!topic)
             return Result::ZERO_TOPIC;
+#ifdef MSGBUS_DEBUG
         topic->print("Registering topic: ");
+#endif
         std::lock_guard<std::mutex> lock(mutex_);
         auto name = std::string(topic->getName());
         auto topicHandle = TopicBase::fnv1a32(name);
