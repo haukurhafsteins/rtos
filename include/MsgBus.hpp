@@ -124,6 +124,8 @@ public:
     const std::string &getFormat() const { return format; }
     void setUnit(Metrics::Unit unit) { topicUnit = unit; }
     void setFormat(const std::string &fmt) { format = fmt; }
+    /// @brief Get the number of subscribers to this topic.
+    /// @return 0 if no subscribers.
     size_t subscribers() const
     {
         std::lock_guard<std::mutex> lk(subs_mtx_);
