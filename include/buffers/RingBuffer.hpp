@@ -2,6 +2,8 @@
 #include <stdexcept>
 #include <cassert>
 #include <cstddef>
+#include <span>
+#include <string>
 #include <utility>
 
 // Lock policies ---------------------------------------------------------------
