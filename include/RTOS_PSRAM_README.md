@@ -84,7 +84,7 @@ Returns the amount of free memory available in PSRAM.
 ## Usage Example
 
 ```c
-#include "psram.h"
+#include "rtos_psram.h"
 
 int main() {
     rtos_psram_init(NULL);
