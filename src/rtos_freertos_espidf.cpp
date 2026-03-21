@@ -624,8 +624,7 @@ namespace rtos
             GPIO_NUM_45,
             GPIO_NUM_46,
             GPIO_NUM_47,
-            GPIO_NUM_48
-        };
+            GPIO_NUM_48};
 
         static inline uint64_t now_us() { return esp_timer_get_time(); }
 
@@ -825,5 +824,104 @@ namespace rtos
         void Pin::attach_queue(RtosQueue<Event> *q) { static_cast<EspIdfImpl *>(impl_)->attach_queue(q); }
         void Pin::set_debounce_us(uint32_t us) { static_cast<EspIdfImpl *>(impl_)->set_debounce_us(us); }
 
+    }
+}
+
+namespace rtos::memory
+{
+    //-----------------------------------------------------------------------------
+    // psram implementation for ESP-IDF
+    //-----------------------------------------------------------------------------
+    static const char *PSRAM_TAG = "PSRAM";
+
+    void *rtos_psram_malloc(std::size_t size)
+    {
+        void *ptr = heap_caps_malloc(size + sizeof(size_t), MALLOC_CAP_SPIRAM);
+        if (ptr == NULL)
+        {
+            RTOS_LOGE(PSRAM_TAG, "malloc failed for size %zu", size);
+            return NULL;
+        }
+        if (size > 1024 * 1024)
+        {
+            RTOS_LOGW(PSRAM_TAG, "rtos_psram_malloc: Large allocation of %zu bytes", size);
+        }
+        // Store the size at the beginning
+        *((size_t *)ptr) = size;
+        return (char *)ptr + sizeof(size_t);
+    }
+
+    void rtos_psram_free(void *ptr)
+    {
+        if (ptr == NULL)
+            return;
+        // Adjust the pointer back to the original allocation
+        void *original_ptr = (char *)ptr - sizeof(size_t);
+        heap_caps_free(original_ptr);
+    }
+
+    void *rtos_psram_calloc(std::size_t num, std::size_t size)
+    {
+        void *ptr = heap_caps_calloc(1, num * size + sizeof(size_t), MALLOC_CAP_SPIRAM);
+        if (ptr == NULL)
+        {
+            RTOS_LOGE(PSRAM_TAG, "calloc failed for size %zu", num * size);
+            return NULL;
+        }
+        if (num * size > 1024 * 1024)
+        {
+            RTOS_LOGW(PSRAM_TAG, "rtos_psram_calloc: Large allocation of %zu bytes", num * size);
+        }
+        // Store the size at the beginning
+        *((size_t *)ptr) = num * size;
+        return (char *)ptr + sizeof(size_t);
+    }
+
+    void *rtos_psram_realloc(void *ptr, std::size_t size)
+    {
+        if (ptr == NULL)
+        {
+            return rtos_psram_malloc(size);
+        }
+        // Adjust the pointer back to the original allocation
+        void *original_ptr = (char *)ptr - sizeof(size_t);
+        void *newPtr = heap_caps_realloc(original_ptr, size + sizeof(size_t), MALLOC_CAP_SPIRAM);
+        if (newPtr == NULL)
+        {
+            RTOS_LOGE(PSRAM_TAG, "realloc failed for size %zu", size);
+            return NULL;
+        }
+        // Store the new size at the beginning
+        *((size_t *)newPtr) = size;
+        return (char *)newPtr + sizeof(size_t);
+    }
+
+    std::size_t rtos_psram_allocated_size(void *ptr)
+    {
+        if (ptr == NULL)
+            return 0;
+        // Adjust the pointer back to the original allocation
+        void *original_ptr = (char *)ptr - sizeof(size_t);
+        size_t *size = (size_t *)original_ptr;
+        return *size;
+    }
+
+    int rtos_psram_get_free_size()
+    {
+        return heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    }
+
+    int rtos_psram_roundup(int size)
+    {
+        return (size + sizeof(long long) - 1) & ~(sizeof(long long) - 1);
+    }
+
+    int rtos_psram_init(void *notUsed)
+    {
+        return 0;
+    }
+
+    void rtos_psram_shutdown(void *notUsed)
+    {
     }
 }
