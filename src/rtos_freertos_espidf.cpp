@@ -460,24 +460,37 @@ void RtosLog::unlock()
     }
 }
 
-void RtosLog::vlog(LogLevel level, const char *tag, const char *msg, va_list ap)
+void RtosLog::vlog(LogLevel level, const char *tag, const char *fmt, va_list ap)
 {
+    char line[RTOS_LOG_LINE_MAX];
+    va_list ap_copy;
+    va_copy(ap_copy, ap);
+    int n = std::vsnprintf(line, sizeof(line), fmt ? fmt : "", ap_copy);
+    va_end(ap_copy);
+
+    if (n < 0)
+    {
+        return;
+    }
+
+    line[sizeof(line) - 1] = '\0';
+
     switch (level)
     {
     case rtos::LogLevel::Error:
-        ESP_LOGE(tag, "%s", msg);
+        ESP_LOGE(tag, "%s", line);
         break;
     case rtos::LogLevel::Warn:
-        ESP_LOGW(tag, "%s", msg);
+        ESP_LOGW(tag, "%s", line);
         break;
     case rtos::LogLevel::Info:
-        ESP_LOGI(tag, "%s", msg);
+        ESP_LOGI(tag, "%s", line);
         break;
     case rtos::LogLevel::Debug:
-        ESP_LOGD(tag, "%s", msg);
+        ESP_LOGD(tag, "%s", line);
         break;
     case rtos::LogLevel::Verbose:
-        ESP_LOGV(tag, "%s", msg);
+        ESP_LOGV(tag, "%s", line);
         break;
     default:
         break;
