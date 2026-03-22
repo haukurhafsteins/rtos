@@ -132,3 +132,15 @@ void main(void)
 ## TODO
 - [ ] Add I2C abstraction
 - [ ] Add Gattserver abstraction
+
+## Host Tests
+
+Reusable host-side gtests for the RTOS abstraction live in `components/rtos/tests`.
+
+```bash
+cmake -S components/rtos/tests -B build-rtos-tests
+cmake --build build-rtos-tests
+ctest --test-dir build-rtos-tests --output-on-failure
+```
+
+These tests are written against the RTOS component API so they can move with the component into other projects without being rewritten.
