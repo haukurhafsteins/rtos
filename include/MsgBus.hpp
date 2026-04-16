@@ -210,6 +210,11 @@ public:
     /// @return Reference to the topic data.
     T &data() { return msg.getData(); }
 
+    /// @brief Get a const pointer to the topic data for reading.
+    /// @note Can only be called from the thread that owns the topic.
+    /// @return Const pointer to the topic data.
+    const T* data() const { return msg.getData(); }
+
     /// @brief Reset the topic data to default-constructed value.
     void resetData()
     {

@@ -21,4 +21,5 @@ public:
     size_t payloadSize() const { return sizeof(D); }
     size_t cmdSize() const { return sizeof(C); }
     D& getData() { return data; }
+    const D* getData() const { return &data; }
 };
