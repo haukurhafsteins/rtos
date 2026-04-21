@@ -27,7 +27,7 @@ public:
         _sendTimeoutMs = RTOS_TASK_WAIT_FOREVER;
     }
 
-    void start(int core_id = RtosTask::TASK_NO_AFFINITY) { _task.start(core_id); }
+    bool start(int core_id = RtosTask::TASK_NO_AFFINITY) { return _task.start(core_id); }
     void receiveTimeout(Millis timeoutMs) { _receiveTimeoutMs = timeoutMs; }
     void sendTimeout(Millis timeoutMs) { _sendTimeoutMs = timeoutMs; }
     IRtosMsgReceiver &getMsgReceiver() { return *this; }
@@ -41,7 +41,7 @@ protected:
             printf("ERROR: RtosMsgBufferTask::send: message size %zu exceeds max %zu\n", len, MaxMsgSize);
             return false;
         }
-        return _msgQueue.send(data, len, _sendTimeoutMs);
+        return _msgQueue.send(data, len, timeoutMs);
     }
     virtual void taskEntry() {}
     virtual void handleMessage(std::span<const std::byte> data) = 0;
@@ -91,18 +91,22 @@ private:
                 if (new_period == RTOS_TASK_WAIT_FOREVER)
                 {
                     has_deadline = false; // switch to blocking mode
+                    continue;
                 }
                 else if (!has_deadline || new_period != period)
                 {
                     has_deadline = true;
                     period = new_period;
                     next_deadline = Clock::now() + std::chrono::duration_cast<Clock::duration>(period); // restart cadence from now
+                    continue;
                 }
-                // If unchanged, keep the existing next_deadline
-                continue;
+                // Period unchanged — check if deadline passed while processing
+                if (Clock::now() < next_deadline)
+                    continue; // deadline not yet reached, keep processing messages
+                // Fall through to the timeout handler below
             }
 
-            // receive() timed out (only when has_deadline == true)
+            // receive() timed out OR deadline passed during message processing
             if (has_deadline)
             {
                 handleTimeout();
