@@ -16,6 +16,8 @@ extern "C"
 #include "freertos/queue.h"
 #include "freertos/message_buffer.h"
 #include "freertos/portmacro.h"
+#include "freertos/idf_additions.h"
+#include "esp_heap_caps.h"
 }
 
 #include <esp_timer.h>
@@ -37,6 +39,8 @@ namespace
         return (bytes + sizeof(StackType_t) - 1) / sizeof(StackType_t);
     }
 
+    constexpr UBaseType_t task_stack_caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+
 } // namespace
 
 namespace rtos::backend
@@ -50,7 +54,7 @@ namespace rtos::backend
     {
         TaskHandle_t native = nullptr;
         const uint32_t depth = bytes_to_stack_depth(stack_size_bytes);
-        BaseType_t res = xTaskCreate(func, name, depth, arg, priority, &native);
+        BaseType_t res = xTaskCreateWithCaps(func, name, depth, arg, priority, &native, task_stack_caps);
         if (res != pdPASS)
         {
             out_handle = nullptr;
@@ -64,7 +68,7 @@ namespace rtos::backend
     {
         TaskHandle_t native = nullptr;
         const uint32_t depth = bytes_to_stack_depth(stack_size_bytes);
-        BaseType_t res = xTaskCreatePinnedToCore(func, name, depth, arg, priority, &native, core_id);
+        BaseType_t res = xTaskCreatePinnedToCoreWithCaps(func, name, depth, arg, priority, &native, core_id, task_stack_caps);
         if (res != pdPASS)
         {
             out_handle = nullptr;
@@ -78,7 +82,7 @@ namespace rtos::backend
     {
         if (handle)
         {
-            vTaskDelete(static_cast<TaskHandle_t>(handle));
+            vTaskDeleteWithCaps(static_cast<TaskHandle_t>(handle));
         }
     }
 
@@ -182,7 +186,7 @@ namespace rtos::backend
     //-----------------------------------------------------------------------------
     bool msgbuf_create(MsgBufferHandle &out_handle, std::size_t capacity_bytes) noexcept
     {
-        MessageBufferHandle_t h = xMessageBufferCreate(capacity_bytes);
+        MessageBufferHandle_t h = xMessageBufferCreateWithCaps(capacity_bytes, MALLOC_CAP_DEFAULT);
         if (!h)
         {
             out_handle = nullptr;
@@ -195,13 +199,14 @@ namespace rtos::backend
     void msgbuf_delete(MsgBufferHandle handle) noexcept
     {
         if (handle)
-            vMessageBufferDelete(static_cast<MessageBufferHandle_t>(handle));
+            vMessageBufferDeleteWithCaps(static_cast<MessageBufferHandle_t>(handle));
     }
 
     std::size_t msgbuf_send(MsgBufferHandle handle,
                             const void *data, std::size_t bytes,
                             Millis timeout_ms) noexcept
     {
+        if (!handle) return 0;
         return xMessageBufferSend(static_cast<MessageBufferHandle_t>(handle),
                                   data, bytes, to_ticks(timeout_ms));
     }
@@ -210,6 +215,7 @@ namespace rtos::backend
                                void *out, std::size_t max_bytes,
                                Millis timeout_ms) noexcept
     {
+        if (!handle) return 0;
         return xMessageBufferReceive(static_cast<MessageBufferHandle_t>(handle),
                                      out, max_bytes, to_ticks(timeout_ms));
     }
