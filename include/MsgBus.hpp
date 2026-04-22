@@ -208,12 +208,22 @@ public:
     /// @brief Get a reference to the topic data for reading or modification.
     /// @note Can only be called from the thread that owns the topic.
     /// @return Reference to the topic data.
-    T &data() { return msg.getData(); }
+        T &value() { return msg.getData(); }
 
-    /// @brief Get a const pointer to the topic data for reading.
+        /// @brief Get a const reference to the topic data for reading.
     /// @note Can only be called from the thread that owns the topic.
-    /// @return Const pointer to the topic data.
-    const T* data() const { return msg.getData(); }
+        /// @return Const reference to the topic data.
+        const T &value() const { return *msg.getData(); }
+
+        /// @brief Get a pointer to the topic data for reading or modification.
+        /// @note Can only be called from the thread that owns the topic.
+        /// @return Pointer to the topic data.
+        T *valuePtr() { return &msg.getData(); }
+
+        /// @brief Get a const pointer to the topic data for reading.
+        /// @note Can only be called from the thread that owns the topic.
+        /// @return Const pointer to the topic data.
+        const T *valuePtr() const { return msg.getData(); }
 
     /// @brief Reset the topic data to default-constructed value.
     void resetData()
