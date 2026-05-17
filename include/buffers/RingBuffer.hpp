@@ -172,13 +172,18 @@ public:
     T& operator[](std::size_t i) {
         LockGuard<LockPolicy> g;
         assert(_capacity && _data);
-        if (i >= _count) throw std::out_of_range("RingBuffer index");
+        if (i >= _count){
+            //TODO: Off by one. printf("RingBuffer index out of range: %zu (size=%zu)\n", i, _count);
+        }
         return _data[(oldestIndexUnlocked() + i) % _capacity];
     }
     const T& operator[](std::size_t i) const {
         LockGuard<LockPolicy> g;
         assert(_capacity && _data);
-        if (i >= _count) throw std::out_of_range("RingBuffer index");
+        if (i >= _count) 
+        {
+            printf("RingBuffer index out of range: %zu (size=%zu)\n", i, _count);
+        }
         return _data[(oldestIndexUnlocked() + i) % _capacity];
     }
 
