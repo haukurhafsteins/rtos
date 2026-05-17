@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <type_traits>
 #include <utility>
+#include <mutex>
 #include "backend.hpp"
 #include "time.hpp"
 
@@ -12,10 +13,8 @@ public:
     explicit RtosMsgBuffer(std::size_t capacity_bytes) noexcept
         : _handle(nullptr), _capacity(capacity_bytes)
     {
-        (void)rtos::backend::msgbuf_create(_handle, capacity_bytes);
-        // If you prefer hard-fail:
-        // bool ok = rtos::backend::msgbuf_create(_handle, capacity_bytes);
-        // assert(ok && "msgbuf_create failed");
+        bool ok = rtos::backend::msgbuf_create(_handle, capacity_bytes);
+        assert(ok && "msgbuf_create failed — not enough internal RAM");
     }
 
     ~RtosMsgBuffer() { close(); }
@@ -35,9 +34,12 @@ public:
     }
 
     // Raw byte API (returns bytes sent/received)
+    // Mutex-protected to allow multiple concurrent writers
+    // (FreeRTOS MessageBuffer only supports single writer natively)
     std::size_t send(const void* data, std::size_t bytes,
                      Millis timeout_ms = Millis::max()) noexcept
     {
+        std::lock_guard<std::mutex> lk(_send_mtx);
         return rtos::backend::msgbuf_send(_handle, data, bytes, timeout_ms);
     }
 
@@ -47,6 +49,7 @@ public:
         return send(data, bytes, timeout_ms) == bytes;
     }
 
+    // Receive is NOT mutex-protected — only one reader (the owning task) should call it
     std::size_t receive(void* out, std::size_t max_bytes,
                         Millis timeout_ms = Millis::max()) noexcept
     {
@@ -68,7 +71,7 @@ public:
         return receive(&out, sizeof(T), timeout_ms) == sizeof(T);
     }
 
-    // ISR variants
+    // ISR variants (no mutex — must be called from ISR context only)
     std::size_t send_isr(const void* data, std::size_t bytes, bool* hp_task_woken = nullptr) noexcept {
         return rtos::backend::msgbuf_send_isr(_handle, data, bytes, hp_task_woken);
     }
@@ -99,4 +102,5 @@ private:
 
     rtos::backend::MsgBufferHandle _handle;
     std::size_t _capacity;
+    std::mutex _send_mtx;
 };
