@@ -12,7 +12,6 @@
 #include <string_view>
 #include <algorithm>
 #include <typeinfo>
-#include "esp_log.h"
 #include "Metrics.hpp"
 
 // As RTTI is disabled, we need our own type identification mechanism.
