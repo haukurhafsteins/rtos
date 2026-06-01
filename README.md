@@ -1,146 +1,251 @@
-# RTOS Abstraction Layer
+# rtos
 
-The goal of this system is to abstract RTOS.
+Small C++ RTOS abstraction and utility component for embedded projects.
 
-**Supported systems**
-- FreeRTOS
+This component is not meant to hide every operating-system or framework detail. Its purpose is to provide a stable project-level API for the RTOS and library features that application code uses most often, while still allowing platform-specific code when that is the right tool.
+
+The current focus is:
+
+- tasks and task sleep/yield helpers
+- typed queues
+- variable-size message buffers
+- message-buffer-backed tasks
+- monotonic timing utilities
+- lightweight topic/message bus helpers
+- logging wrappers and sinks
+- GPIO and PSRAM helpers where supported by the backend
+- small embedded utilities such as `QMsg`, `Singleton`, fixed strings, ring buffers, envelopes, and online statistics
+
+## Supported Backends
+
+The component is structured around a small backend interface in `include/backend.hpp`.
+
+Current backend code exists for:
+
+- ESP-IDF / FreeRTOS
 - Zephyr
+- Linux host support for selected utilities and tests
 
-In your makefile define one of the following for the OS to use:
-* `USE_FREERTOS`:
-* `USE_ZEPHYR`:
+Select the target backend with compile definitions used by the headers:
 
-## Tasks
-### The Task Class
-#### Singleton
-```c++
-// Header file MyTask.hpp
-#include <span>
+```cmake
+target_compile_definitions(your_target PRIVATE USE_FREERTOS)
+# or
+target_compile_definitions(your_target PRIVATE USE_ZEPHYR)
+```
+
+The top-level `CMakeLists.txt` is currently set up as an ESP-IDF component and builds the ESP-IDF/FreeRTOS backend sources.
+
+## Design Scope
+
+This library intentionally abstracts only common, repeat-use behavior. It does not try to become a complete POSIX, FreeRTOS, Zephyr, or ESP-IDF compatibility layer.
+
+Good fits:
+
+- portable task creation where the application does not care about the native task handle
+- message passing between tasks
+- task loops with periodic timeout handling
+- monotonic time measurement and RTOS sleeps
+- simple publish/subscribe of typed values
+- shared logging calls across host and embedded builds
+
+Use native platform APIs directly when you need:
+
+- advanced scheduler configuration
+- full driver coverage
+- uncommon RTOS primitives
+- platform-specific power management, interrupts, or memory capabilities
+- performance-sensitive code that depends on backend-specific behavior
+
+## Core APIs
+
+### `RtosTask`
+
+`RtosTask` wraps task creation, deletion, sleep, yield, current task lookup, and optional core pinning.
+
+```cpp
+#include <RtosTask.hpp>
+
+static void worker(void *arg)
+{
+    while (true)
+    {
+        // do work
+        RtosTask::sleep_ms(Millis{100});
+    }
+}
+
+RtosTask task("worker", 4096, 3, worker, nullptr);
+task.start();
+```
+
+### `RtosQueue<T>`
+
+`RtosQueue<T>` is a typed queue for trivially copyable values. It supports blocking, non-blocking, ISR send/receive variants, count/space introspection, and reset.
+
+```cpp
+#include <RtosQueue.hpp>
+
+struct Sample
+{
+    int value;
+};
+
+RtosQueue<Sample> queue(8);
+queue.send(Sample{42});
+
+Sample sample{};
+if (queue.receive(sample, 100))
+{
+    // sample.value == 42
+}
+```
+
+### `RtosMsgBuffer`
+
+`RtosMsgBuffer` carries variable-size messages. It has a raw byte API plus typed helpers for trivially copyable objects.
+
+```cpp
+#include <RtosMsgBuffer.hpp>
+
+RtosMsgBuffer messages(256);
+
+uint32_t value = 10;
+messages.send_obj(value);
+
+uint32_t received{};
+messages.receive_obj(received);
+```
+
+### `RtosMsgBufferTask`
+
+`RtosMsgBufferTask<MaxMsgSize>` combines a task and a message buffer. Derive from it when a task should process commands or events from other tasks.
+
+```cpp
 #include <RtosMsgBufferTask.hpp>
-#include <Singleton.hpp>
 #include <QMsg.hpp>
 
-// List of commands the task can receive
-enum class MyCmd
+enum class WorkerCmd : uint32_t
 {
-    Msg1,
-    Msg2
+    Ping,
+    SetValue,
 };
 
-// Message payload definitions. Msg1 has no payload
-class MyMsg2 {
-public:
-    int var1;
+struct SetValue
+{
+    int value;
 };
 
-// Provide the maximum possible message size
-class MyTask : public RtosMsgBufferTask<sizeof(QMsg<MyCmd, MyMsg2>)>, public Singleton<MyTask>
+class WorkerTask : public RtosMsgBufferTask<sizeof(QMsg<WorkerCmd, SetValue>)>
 {
 public:
-    MyTask(const char *name, size_t stackSize, int priority, size_t qByteSize);
+    WorkerTask()
+        : RtosMsgBufferTask("worker", 4096, 3, 256)
+    {
+    }
 
-    void sendMsg1();
-    void sendMsg2(MyMsg2 &msg2);
+    bool ping()
+    {
+        QMsg msg(WorkerCmd::Ping);
+        return send(&msg, msg.size());
+    }
+
+    bool setValue(SetValue value)
+    {
+        QMsg msg(WorkerCmd::SetValue, value);
+        return send(&msg, msg.size());
+    }
 
 protected:
-    void handleMessage(std::span<const std::byte> data) override;
-    void handleTimeout() override;
+    void handleMessage(std::span<const std::byte> data) override
+    {
+        auto *base = reinterpret_cast<const QMsg<WorkerCmd> *>(data.data());
+        switch (base->cmd)
+        {
+        case WorkerCmd::Ping:
+            break;
+        case WorkerCmd::SetValue:
+        {
+            auto *msg = reinterpret_cast<const QMsg<WorkerCmd, SetValue> *>(data.data());
+            auto value = msg->getData()->value;
+            (void)value;
+            break;
+        }
+        }
+    }
 };
-```
 
-```c++
-// Source File MyTask.cpp
-#include "MyTask.hpp"
+static WorkerTask worker;
 
-//---------------------------------------------------------------------------
-// Class initialization
-//---------------------------------------------------------------------------
-MyTask::MyTask(const char *name, size_t stackSize, int priority, size_t qByteSize)
-    : RtosMsgBufferTask(name, stackSize, priority, qByteSize)
+void app_main()
 {
-}
-
-//---------------------------------------------------------------------------
-// Message reception
-//---------------------------------------------------------------------------
-void MyTask::handleMessage(std::span<const std::byte> data)
-{
-    auto msg = (QMsg<MyCmd, uint8_t> *)data.data();
-    switch (msg->cmd)
-    {
-    case MyCmd::Msg1:
-        // ...
-        break;
-    case MyCmd::Msg2:
-    {
-         auto msg = (QMsg<MyCmd, MyMsg2> *)data.data();
-        auto val = msg->getData();
-        // ...
-        break;
-    }
-    }
-}
-
-void MyTask::handleTimeout()
-{
-    // ...
-    // To activate the timeout, call receiveTimeout(timeout).
-    // Example: receiveTimeout(static_cast<Millis>(100));
-    // Use RTOS_TASK_WAIT_FOREVER to trigger waiting forever (default).
-}
-
-//---------------------------------------------------------------------------
-// Message sending
-//---------------------------------------------------------------------------
-void MyTask::sendMsg1() 
-{
-    QMsg msg(MyCmd::Msg1);
-    send(&msg, msg.size());
-}
-void MyTask::sendMsg2(MyMsg2 &msg2)
-{
-    QMsg msg(MyCmd::Msg2, msg2);
-    send(&msg, msg.size());
+    worker.start();
+    worker.ping();
 }
 ```
 
-### Start a Task
-#### Multiple Instances
-```c++
-// name, stack size, priority, queue byte size
-TheTask mytask1("task1", 4096, 3, 256);
-TheTask mytask2("task2", 4096, 3, 256);
-```
-#### Singleton
-```c++
-// Define globally the _instance variable for the singleton
-template <> MyTask *Singleton<GestureTask>::_instance = nullptr;
-...
-void main(void)
-{
-    ...
-    // Create the task
-    static MyTask mytask("myTaskName", 4096, 3, 256); // Create
-    MyTask::bind(mytask);   // Bind to _instance
-    ...
+`receiveTimeout()` enables periodic timeout callbacks. Use `RTOS_TASK_WAIT_FOREVER` for the default blocking behavior.
 
-    // Access the instance from anywhere
-    MyTask::get().somePublicFunction(...);
-}
+### `rtos::time`
+
+`include/time.hpp` provides `std::chrono`-friendly duration aliases, a monotonic high-resolution clock, and task sleep helpers.
+
+```cpp
+#include <time.hpp>
+
+using namespace rtos::time;
+using namespace std::chrono_literals;
+
+auto start = HighResClock::now();
+sleep_for(20ms);
+auto elapsed = std::chrono::duration_cast<Micros>(HighResClock::now() - start);
 ```
 
-## TODO
-- [ ] Add I2C abstraction
-- [ ] Add Gattserver abstraction
+See [`include/TIME.md`](include/TIME.md) for more detail.
+
+### `MsgBus` and `Topic<T>`
+
+`MsgBus` provides a small typed publish/subscribe registry. Topics are long-lived, named values; subscribers receive topic updates through an `IRtosMsgReceiver`, commonly a `RtosMsgBufferTask`.
+
+See [`include/MSGBUS.md`](include/MSGBUS.md) for the full API and usage model.
+
+### Other Utilities
+
+Additional utility headers live under `include/`:
+
+- [`include/buffers/RINGBUFFER.md`](include/buffers/RINGBUFFER.md)
+- [`include/envelope/ENVELOPE.md`](include/envelope/ENVELOPE.md)
+- [`include/Gpio.md`](include/Gpio.md)
+- [`include/RTOS_PSRAM_README.md`](include/RTOS_PSRAM_README.md)
+- [`include/statistics/MinMaxAvg.md`](include/statistics/MinMaxAvg.md)
+
+## ESP-IDF Usage
+
+As an ESP-IDF component, add this repository under your project's `components/rtos` directory or include it as a managed component/submodule. The provided `idf_component.yml` describes the component metadata, and `CMakeLists.txt` registers the ESP-IDF backend sources.
+
+Typical project code should include the abstraction headers rather than native backend headers:
+
+```cpp
+#include <RtosTask.hpp>
+#include <RtosQueue.hpp>
+#include <RtosMsgBufferTask.hpp>
+#include <time.hpp>
+```
+
+Only backend code should normally include ESP-IDF, FreeRTOS, or Zephyr headers directly.
 
 ## Host Tests
 
-Reusable host-side gtests for the RTOS abstraction live in `components/rtos/tests`.
+Reusable host-side tests live in `tests/`.
 
 ```bash
-cmake -S components/rtos/tests -B build-rtos-tests
+cmake -S tests -B build-rtos-tests
 cmake --build build-rtos-tests
 ctest --test-dir build-rtos-tests --output-on-failure
 ```
 
-These tests are written against the RTOS component API so they can move with the component into other projects without being rewritten.
+These tests are written against the component APIs so they can move with the component into other projects.
+
+## Status
+
+This component is evolving with the projects that use it. Prefer small additions that cover common cross-project needs, and keep platform-specific or uncommon functionality in the backend or application layer until it becomes a repeated pattern.
