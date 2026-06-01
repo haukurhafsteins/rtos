@@ -14,6 +14,8 @@ The current focus is:
 - lightweight topic/message bus helpers
 - logging wrappers and sinks
 - GPIO and PSRAM helpers where supported by the backend
+- I2C master bus and device
+- SPI master bus and device
 - small embedded utilities such as `QMsg`, `Singleton`, fixed strings, ring buffers, envelopes, and online statistics
 
 ## Supported Backends
