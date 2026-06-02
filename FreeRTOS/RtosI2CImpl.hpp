@@ -6,6 +6,7 @@
 
 extern "C" {
 #include "driver/i2c_master.h"
+#include "i2cdev.h"
 }
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,9 @@ public:
     /// Initialise the I2C master bus. Returns true on success.
     bool init(const Config& cfg)
     {
+        if (!ensure_i2cdev_initialised())
+            return false;
+
         i2c_master_bus_config_t bus_cfg = {};
         bus_cfg.i2c_port              = static_cast<i2c_port_num_t>(cfg.port);
         bus_cfg.sda_io_num            = static_cast<gpio_num_t>(cfg.sda_pin);
@@ -67,6 +71,16 @@ public:
     i2c_master_bus_handle_t native() const { return handle_; }
 
 private:
+    static bool ensure_i2cdev_initialised()
+    {
+        static bool initialised = false;
+        if (initialised)
+            return true;
+
+        initialised = i2cdev_init() == ESP_OK;
+        return initialised;
+    }
+
     i2c_master_bus_handle_t handle_ = nullptr;
 };
 
