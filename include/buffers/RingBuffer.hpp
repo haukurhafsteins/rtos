@@ -191,14 +191,16 @@ public:
     const T& getRecent(std::size_t idx) const {
         LockGuard<LockPolicy> g;
         assert(_capacity && _data);
-        //if (_count == 0 || idx >= _count) throw std::out_of_range("RingBuffer recent");
+        // Clamp instead of reading stale/garbage on an out-of-range (or underflowed
+        // "negative") index. Embedded build: clamp rather than throw.
+        if (idx >= _count) idx = _count ? _count - 1 : 0;
         const std::size_t pos = (_head + _capacity - 1 - idx) % _capacity;
         return _data[pos];
     }
     void setRecent(std::size_t idx, const T& value) {
         LockGuard<LockPolicy> g;
         assert(_capacity && _data);
-        //if (_count == 0 || idx >= _count) throw std::out_of_range("RingBuffer recent");
+        if (idx >= _count) idx = _count ? _count - 1 : 0; // clamp (was unguarded)
         const std::size_t pos = (_head + _capacity - 1 - idx) % _capacity;
         _data[pos] = value;
     }
