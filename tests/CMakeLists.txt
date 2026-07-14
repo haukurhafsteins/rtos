@@ -37,6 +37,7 @@ add_library(rtos_host_support STATIC
     ../backends/linux/rtos_backend.cpp
     ../backends/linux/rtos_spi.cpp
     ../backends/linux/rtos_i2c.cpp
+    ../backends/linux/rtos_nvs.cpp
 )
 
 target_include_directories(rtos_host_support
