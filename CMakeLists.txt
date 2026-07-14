@@ -4,6 +4,7 @@ idf_component_register(
         "backends/espidf/rtos_spi.cpp"
         "backends/espidf/rtos_i2c.cpp"
         "backends/espidf/rtos_nvs.cpp"
+        "backends/espidf/rtos_watchdog.cpp"
         "src/rtos_common.cpp"
     INCLUDE_DIRS
         "include"
