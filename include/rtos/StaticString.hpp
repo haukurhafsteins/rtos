@@ -3,7 +3,10 @@
 #include <cstring>
 #include <cstdio>
 #include <stdexcept>
-#include <RtosLog.hpp>
+#include "rtos/Log.hpp"
+
+namespace rtos
+{
 
 template <std::size_t N>
 class StaticString
@@ -66,3 +69,5 @@ private:
     char buffer[N]{};
     std::size_t len;
 };
+
+} // namespace rtos

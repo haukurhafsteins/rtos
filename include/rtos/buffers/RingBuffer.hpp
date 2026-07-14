@@ -8,6 +8,9 @@
 
 // Lock policies ---------------------------------------------------------------
 
+namespace rtos
+{
+
 struct NoLock {
     static inline void lock()   noexcept {}
     static inline void unlock() noexcept {}
@@ -273,3 +276,5 @@ public:
 private:
     T _storage[ElementCount];
 };
+
+} // namespace rtos

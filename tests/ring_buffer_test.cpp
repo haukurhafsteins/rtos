@@ -3,7 +3,9 @@
 
 #include <gtest/gtest.h>
 
-#include "buffers/RingBuffer.hpp"
+#include "rtos/buffers/RingBuffer.hpp"
+
+using namespace rtos;
 
 TEST(RingBufferTest, PushAndPopPreserveFifoOrder)
 {

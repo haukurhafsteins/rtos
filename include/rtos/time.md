@@ -59,7 +59,7 @@ Seconds rtos::time::now_s() noexcept; // s since boot
 All examples assume:
 
 ```cpp
-#include "time.hpp"
+#include "rtos/time.hpp"
 using namespace rtos::time;
 using namespace std::chrono_literals; // enables 10ms, 250us, 1s, etc.
 ```
@@ -191,7 +191,7 @@ void delay_us_busy(uint32_t us) {
 ## Minimal example
 
 ```cpp
-#include "time.hpp"
+#include "rtos/time.hpp"
 #include <cstdio>
 using namespace rtos::time;
 using namespace std::chrono_literals;

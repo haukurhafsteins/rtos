@@ -3,11 +3,14 @@
 #include <cstddef>
 #include <type_traits>
 #include <cmath>
-#include "MinMaxAvg.hpp"
+#include "rtos/statistics/MinMaxAvg.hpp"
 
 // Advanced online stats with higher moments (M2..M4) and EMA/EWVAR.
 // T must be floating-point. SumT is the internal high-precision accumulator.
 // IGNORE_NAN: skip non-finite samples.
+
+namespace rtos
+{
 
 template <typename T, typename SumT = long double, bool IGNORE_NAN = true>
 class OnlineStatsAdvanced {
@@ -150,3 +153,5 @@ private:
     // Range tracking
     MinMaxAvg<T, SumT, IGNORE_NAN> mm_;
 };
+
+} // namespace rtos

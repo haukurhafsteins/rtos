@@ -4,8 +4,8 @@
 
 | Class | Wraps |
 |---|---|
-| `RtosSpiBus` | One physical SPI host (shared by all devices on that bus) |
-| `RtosSpiDevice` | One chip-select device on a bus |
+| `rtos::SpiBus` | One physical SPI host (shared by all devices on that bus) |
+| `rtos::SpiDevice` | One chip-select device on a bus |
 
 Both classes are non-copyable and movable. All I/O operations return `bool` (`true` = success).
 
@@ -20,10 +20,10 @@ Both classes are non-copyable and movable. All I/O operations return `bool` (`tr
 ## Include
 
 ```cpp
-#include <RtosSpi.hpp>
+#include "rtos/Spi.hpp"
 ```
 
-## RtosSpiBus
+## rtos::SpiBus
 
 ### Config
 
@@ -41,9 +41,9 @@ struct Config {
 ### Lifecycle
 
 ```cpp
-RtosSpiBus bus;
+rtos::SpiBus bus;
 
-RtosSpiBus::Config bus_cfg;
+rtos::SpiBus::Config bus_cfg;
 bus_cfg.host               = SPI2_HOST;
 bus_cfg.mosi_pin           = PIN_MOSI;
 bus_cfg.miso_pin           = PIN_MISO;
@@ -62,7 +62,7 @@ bus.deinit();  // also called automatically by destructor
 
 Multiple devices can be added to the same bus.
 
-## RtosSpiDevice
+## rtos::SpiDevice
 
 ### Config
 
@@ -80,9 +80,9 @@ struct Config {
 ### Lifecycle
 
 ```cpp
-RtosSpiDevice dev;
+rtos::SpiDevice dev;
 
-RtosSpiDevice::Config dev_cfg;
+rtos::SpiDevice::Config dev_cfg;
 dev_cfg.cs_pin       = PIN_CS;
 dev_cfg.clk_hz       = 5000000;  // 5 MHz
 dev_cfg.mode         = 0;
@@ -148,7 +148,7 @@ bool ok = dev.transfer_cmd(reg, payload, nullptr, sizeof(payload));
 ## Full example — register-based sensor (IIM42352 style)
 
 ```cpp
-#include <RtosSpi.hpp>
+#include "rtos/Spi.hpp"
 
 // Board-level pin constants
 static constexpr int PIN_MOSI = 11;
@@ -156,12 +156,12 @@ static constexpr int PIN_MISO = 13;
 static constexpr int PIN_SCLK = 12;
 static constexpr int PIN_CS   = 10;
 
-static RtosSpiBus    g_bus;
-static RtosSpiDevice g_sensor;
+static rtos::SpiBus    g_bus;
+static rtos::SpiDevice g_sensor;
 
 void sensor_init()
 {
-    RtosSpiBus::Config bus_cfg;
+    rtos::SpiBus::Config bus_cfg;
     bus_cfg.host               = SPI2_HOST;
     bus_cfg.mosi_pin           = PIN_MOSI;
     bus_cfg.miso_pin           = PIN_MISO;
@@ -169,7 +169,7 @@ void sensor_init()
     bus_cfg.max_transfer_bytes = 32;
     g_bus.init(bus_cfg);
 
-    RtosSpiDevice::Config dev_cfg;
+    rtos::SpiDevice::Config dev_cfg;
     dev_cfg.cs_pin       = PIN_CS;
     dev_cfg.clk_hz       = 5000000;  // 5 MHz
     dev_cfg.mode         = 0;
@@ -198,4 +198,4 @@ spi_host_device_t raw_host = g_bus.native();
 spi_device_handle_t raw_dev = g_sensor.native();
 ```
 
-Prefer migrating callers to `RtosSpiDevice` rather than relying on this long-term.
+Prefer migrating callers to `rtos::SpiDevice` rather than relying on this long-term.

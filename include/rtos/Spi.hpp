@@ -16,11 +16,14 @@
 //   - linux:  compile-only stub, all operations return false
 // ---------------------------------------------------------------------------
 
+namespace rtos
+{
+
 // ---------------------------------------------------------------------------
-// RtosSpiBus
+// SpiBus
 // One instance per physical SPI host/bus. Non-copyable, movable.
 // ---------------------------------------------------------------------------
-class RtosSpiBus
+class SpiBus
 {
 public:
     enum class Dma : uint8_t
@@ -39,18 +42,18 @@ public:
         Dma  dma                = Dma::Auto;
     };
 
-    RtosSpiBus() = default;
+    SpiBus() = default;
 
-    RtosSpiBus(const RtosSpiBus&)            = delete;
-    RtosSpiBus& operator=(const RtosSpiBus&) = delete;
+    SpiBus(const SpiBus&)            = delete;
+    SpiBus& operator=(const SpiBus&) = delete;
 
-    RtosSpiBus(RtosSpiBus&& other) noexcept
+    SpiBus(SpiBus&& other) noexcept
         : host_(other.host_), initialised_(other.initialised_)
     {
         other.initialised_ = false;
     }
 
-    RtosSpiBus& operator=(RtosSpiBus&& other) noexcept
+    SpiBus& operator=(SpiBus&& other) noexcept
     {
         if (this != &other)
         {
@@ -62,7 +65,7 @@ public:
         return *this;
     }
 
-    ~RtosSpiBus() { deinit(); }
+    ~SpiBus() { deinit(); }
 
     /// Initialise the SPI master bus. Returns true on success.
     bool init(const Config& cfg);
@@ -81,10 +84,10 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// RtosSpiDevice
+// SpiDevice
 // One instance per device (chip select) on a bus. Non-copyable, movable.
 // ---------------------------------------------------------------------------
-class RtosSpiDevice
+class SpiDevice
 {
 public:
     struct Config
@@ -97,24 +100,24 @@ public:
         int      queue_size   = 1;       ///< Transaction queue depth (1 = polling, no pipelining)
     };
 
-    RtosSpiDevice() = default;
+    SpiDevice() = default;
 
-    RtosSpiDevice(const RtosSpiDevice&)            = delete;
-    RtosSpiDevice& operator=(const RtosSpiDevice&) = delete;
+    SpiDevice(const SpiDevice&)            = delete;
+    SpiDevice& operator=(const SpiDevice&) = delete;
 
-    RtosSpiDevice(RtosSpiDevice&& other) noexcept
+    SpiDevice(SpiDevice&& other) noexcept
         : handle_(other.handle_) { other.handle_ = nullptr; }
 
-    RtosSpiDevice& operator=(RtosSpiDevice&& other) noexcept
+    SpiDevice& operator=(SpiDevice&& other) noexcept
     {
         if (this != &other) { deinit(); handle_ = other.handle_; other.handle_ = nullptr; }
         return *this;
     }
 
-    ~RtosSpiDevice() { deinit(); }
+    ~SpiDevice() { deinit(); }
 
     /// Register this device on the given bus. Returns true on success.
-    bool init(RtosSpiBus& bus, const Config& cfg);
+    bool init(SpiBus& bus, const Config& cfg);
 
     /// Remove the device from the bus. Safe to call when not initialised.
     void deinit();
@@ -148,3 +151,5 @@ public:
 private:
     void* handle_ = nullptr;
 };
+
+} // namespace rtos

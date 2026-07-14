@@ -1,16 +1,17 @@
 #pragma once
 
-#include "RtosMsgBufferTask.hpp"
-#include "Singleton.hpp"
+#include "rtos/MsgBufferTask.hpp"
+#include "rtos/Singleton.hpp"
 #include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <list>
 #include <algorithm>
-#include "QMsg.hpp"
-#include "time.hpp"
+#include "rtos/QMsg.hpp"
+#include "rtos/time.hpp"
 
-using namespace std::chrono;
+namespace rtos
+{
 
 enum class SchedulerCmd : uint8_t
 {
@@ -20,20 +21,20 @@ enum class SchedulerCmd : uint8_t
 
 struct SMsg; // Forward declaration of SMsg
 
-class MsgSchedulerTask : public RtosMsgBufferTask<sizeof(QMsg<SchedulerCmd, SMsg>*)>, public Singleton<MsgSchedulerTask>
+class MsgSchedulerTask : public MsgBufferTask<sizeof(QMsg<SchedulerCmd, SMsg>*)>, public Singleton<MsgSchedulerTask>
 {
 public:
     struct SMsg
     {
-        IRtosMsgReceiver *task;
-        milliseconds period;
+        IMsgReceiver *task;
+        std::chrono::milliseconds period;
         uint64_t nextTime;
         bool periodic;
         uint32_t size;
     };
-    
+
     MsgSchedulerTask(const char *name, size_t stackSize, int priority, size_t qByteSize)
-        : RtosMsgBufferTask(name, stackSize, priority, qByteSize) {}
+        : MsgBufferTask(name, stackSize, priority, qByteSize) {}
 
     /// @brief Schedule a message to be sent to a task after a delay.
     /// @param task The task to send the message to.
@@ -42,10 +43,10 @@ public:
     /// @param delay Delay before sending the message.
     /// @param periodic If true, the message will be sent periodically.
     /// @note The message data must be less than the queue size given in the constructor.
-    const SMsg* schedule(IRtosMsgReceiver *task,
+    const SMsg* schedule(IMsgReceiver *task,
                   const void *data,
                   size_t size,
-                  milliseconds delay,
+                  std::chrono::milliseconds delay,
                   bool periodic = false)
     {
         if (!data || size == 0)
@@ -104,7 +105,7 @@ protected:
         }
         processQueue();
         _list.sort([](const SMsg* a, const SMsg* b)
-        { return a->nextTime < b->nextTime; });        
+        { return a->nextTime < b->nextTime; });
 }
 
     void handleTimeout() override
@@ -117,7 +118,8 @@ private:
 
     uint64_t now() const
     {
-        return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
     }
 
     void processQueue()
@@ -145,7 +147,7 @@ private:
         }
         else
         {
-            receiveTimeout(RTOS_TASK_WAIT_FOREVER); // no messages => wait forever
+            receiveTimeout(backend::WAIT_FOREVER); // no messages => wait forever
         }
     }
 
@@ -161,3 +163,5 @@ private:
         }
     }
 };
+
+} // namespace rtos

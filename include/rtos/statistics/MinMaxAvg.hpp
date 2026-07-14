@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <type_traits>
 #include <math.h>
-#include "time.hpp"
+#include "rtos/time.hpp"
 
 // Embedded-friendly Min/Max/Average
 // - No dynamic allocation, tiny headers
@@ -16,6 +16,9 @@
 //   SumT       : accumulator type for sum (default = double). Use a wider type
 //                for integers (e.g., int64_t) to avoid overflow.
 //   IGNORE_NAN : if true and T is floating, NaNs are skipped silently.
+namespace rtos
+{
+
 template <typename T, typename SumT = double, bool IGNORE_NAN = false>
 class MinMaxAvg
 {
@@ -167,3 +170,5 @@ private:
     Millis windowSize_;
     Millis startAddTime_ = Millis(0);
 };
+
+} // namespace rtos

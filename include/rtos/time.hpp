@@ -38,3 +38,11 @@ namespace rtos::time
         return static_cast<T>(now_us().count()) * us_to_s;
     }
 } // namespace rtos::time
+
+namespace rtos
+{
+    // Hoisted aliases — these are used throughout the rtos API surface
+    using time::Micros;
+    using time::Millis;
+    using time::Seconds;
+}

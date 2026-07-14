@@ -1,7 +1,7 @@
 #pragma once
 #include <typeindex>
-#include "QMsg.hpp"
-#include "RtosMsgBufferTask.hpp"
+#include "rtos/QMsg.hpp"
+#include "rtos/MsgBufferTask.hpp"
 #include <cstdint>
 #include <functional>
 #include <limits>
@@ -12,7 +12,10 @@
 #include <string_view>
 #include <algorithm>
 #include <typeinfo>
-#include "Metrics.hpp"
+#include "rtos/Metrics.hpp"
+
+namespace rtos
+{
 
 // As RTTI is disabled, we need our own type identification mechanism.
 using TypeId = const void *;
@@ -48,7 +51,7 @@ public:
     /// @param q Message queue to subscribe.
     /// @param topicId Topic ID to subscribe to.
     /// @return True if the subscriber was added, false if it already exists.
-    [[nodiscard]] bool addSubscriber(IRtosMsgReceiver &q, TopicId topicId)
+    [[nodiscard]] bool addSubscriber(IMsgReceiver &q, TopicId topicId)
     {
         std::lock_guard<std::mutex> lk(subs_mtx_);
         // printf("Adding subscriber to topic %s, queue: %p topicId: %lu\n", _name.data(), &q, topicId);
@@ -68,7 +71,7 @@ public:
     /// @param q Message queue to unsubscribe.
     /// @param topicId Topic ID to unsubscribe from.
     /// @return True if the subscriber was removed, false if it did not exist.
-    [[nodiscard]] bool removeSubscriber(IRtosMsgReceiver &q, TopicId topicId)
+    [[nodiscard]] bool removeSubscriber(IMsgReceiver &q, TopicId topicId)
     {
         std::lock_guard<std::mutex> lk(subs_mtx_);
         auto it = remove_if(subscribers_.begin(), subscribers_.end(),
@@ -148,7 +151,7 @@ public:
 protected:
     struct Sub
     {
-        IRtosMsgReceiver *q;
+        IMsgReceiver *q;
         uint32_t id;
     };
     std::vector<Sub> subscribers_;
@@ -163,7 +166,7 @@ protected:
 /// @brief Typed topic: publishes QMsg<T>
 ///
 /// Access to the topic is exclusive to one thread at a time.
-/// The topic maintains a list of subscribers (IRtosMsgReceiver and topicId).
+/// The topic maintains a list of subscribers (IMsgReceiver and topicId).
 template <typename T, Metrics::Unit U = Metrics::Unit::none>
 class Topic : public TopicBase
 {
@@ -386,7 +389,7 @@ private:
 ///
 /// Registered topics can never be deleted.
 ///
-/// Subscriptions are per-topic and per-receiver (IRtosMsgReceiver).
+/// Subscriptions are per-topic and per-receiver (IMsgReceiver).
 class MsgBus
 {
 public:
@@ -455,14 +458,14 @@ public:
     /// SUB_EXISTS if the receiver is already subscribed to the topic.
     /// @note Before a subscriber is deleted, it must unsubscribe from all topics.
     /// Otherwise, the MsgBus will hold a dangling pointer.
-    static Result subscribe(const TopicId topicId, IRtosMsgReceiver &receiver)
+    static Result subscribe(const TopicId topicId, IMsgReceiver &receiver)
     {
         TopicBase *topic = findTopic(topicId);
         if (!topic)
             return Result::TOPIC_NOT_FOUND;
         return topic->addSubscriber(receiver, topicId) ? Result::OK : Result::SUB_EXISTS;
     }
-    static Result subscribe(const std::string_view name, IRtosMsgReceiver &receiver)
+    static Result subscribe(const std::string_view name, IMsgReceiver &receiver)
     {
         return subscribe(topicId(name), receiver);
     }
@@ -471,7 +474,7 @@ public:
     /// @param topicId Topic ID
     /// @param receiver Receiver message buffer
     /// @return True if unsubscription was successful, false otherwise.
-    static Result unsubscribe(const TopicId topicId, IRtosMsgReceiver &receiver)
+    static Result unsubscribe(const TopicId topicId, IMsgReceiver &receiver)
     {
         TopicBase *topic = nullptr;
         {
@@ -606,3 +609,5 @@ private:
     inline static std::map<TopicId, TopicBase *> topics_{}; // or unordered_map
     inline static std::mutex mutex_;
 };
+
+} // namespace rtos

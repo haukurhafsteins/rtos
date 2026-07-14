@@ -1,16 +1,19 @@
 #pragma once
 #include <cstdint>
 #include <cstddef>
-#include "time.hpp"
+#include "rtos/time.hpp"
 
-using TaskFunction = void (*)(void *);
-using Millis = rtos::time::Millis;
+namespace rtos
+{
+    using TaskFunction = void (*)(void *);
+}
+
 namespace rtos::backend
 {
     // clang-format off
 
     // ========= Common =========
-    inline constexpr Millis RTOS_WAIT_FOREVER = Millis::max();
+    inline constexpr Millis WAIT_FOREVER = Millis::max();
 
     // ===== Task backend (already present) =====
     using TaskHandle = void *;

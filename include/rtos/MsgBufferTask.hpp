@@ -1,36 +1,35 @@
 #pragma once
 
-#include "RtosMsgBuffer.hpp"
-#include "RtosTask.hpp"
-#include "time.hpp"
+#include "rtos/MsgBuffer.hpp"
+#include "rtos/Task.hpp"
+#include "rtos/time.hpp"
 
-using namespace rtos::time;
+namespace rtos
+{
 
-constexpr Millis RTOS_TASK_WAIT_FOREVER = Millis::max();
-
-class IRtosMsgReceiver
+class IMsgReceiver
 {
 public:
     virtual bool send(const void *data, size_t len) = 0;
-    virtual ~IRtosMsgReceiver() = default;
+    virtual ~IMsgReceiver() = default;
 };
 
 template <size_t MaxMsgSize>
-class RtosMsgBufferTask : public IRtosMsgReceiver
+class MsgBufferTask : public IMsgReceiver
 {
 public:
-    RtosMsgBufferTask(const char *name, uint32_t stack_bytes, uint32_t prio, std::size_t buf_cap)
+    MsgBufferTask(const char *name, uint32_t stack_bytes, uint32_t prio, std::size_t buf_cap)
         : _msgQueue(buf_cap),
-          _task(name, stack_bytes, prio, &RtosMsgBufferTask::TaskEntry, this)
+          _task(name, stack_bytes, prio, &MsgBufferTask::TaskEntry, this)
     {
-        _receiveTimeoutMs = RTOS_TASK_WAIT_FOREVER;
-        _sendTimeoutMs = RTOS_TASK_WAIT_FOREVER;
+        _receiveTimeoutMs = backend::WAIT_FOREVER;
+        _sendTimeoutMs = backend::WAIT_FOREVER;
     }
 
-    bool start(int core_id = RtosTask::TASK_NO_AFFINITY) { return _task.start(core_id); }
+    bool start(int core_id = Task::TASK_NO_AFFINITY) { return _task.start(core_id); }
     void receiveTimeout(Millis timeoutMs) { _receiveTimeoutMs = timeoutMs; }
     void sendTimeout(Millis timeoutMs) { _sendTimeoutMs = timeoutMs; }
-    IRtosMsgReceiver &getMsgReceiver() { return *this; }
+    IMsgReceiver &getMsgReceiver() { return *this; }
 
 protected:
     bool send(const void *data, size_t len) { return send(data, len, _sendTimeoutMs); }
@@ -38,7 +37,7 @@ protected:
     {
         if (len > MaxMsgSize)
         {
-            printf("ERROR: RtosMsgBufferTask::send: message size %zu exceeds max %zu\n", len, MaxMsgSize);
+            printf("ERROR: MsgBufferTask::send: message size %zu exceeds max %zu\n", len, MaxMsgSize);
             return false;
         }
         return _msgQueue.send(data, len, timeoutMs);
@@ -49,11 +48,11 @@ protected:
     virtual void handleTimeoutError() {}
 
 private:
-    static void TaskEntry(void *p) { static_cast<RtosMsgBufferTask *>(p)->taskLoop(); }
+    static void TaskEntry(void *p) { static_cast<MsgBufferTask *>(p)->taskLoop(); }
 
     void taskLoop()
     {
-        using Clock = HighResClock;
+        using Clock = time::HighResClock;
 
         auto to_millis = [](auto d)
         { return std::chrono::duration_cast<Millis>(d); };
@@ -61,14 +60,14 @@ private:
         taskEntry();
 
         Millis period = _receiveTimeoutMs;
-        bool has_deadline = (period != RTOS_TASK_WAIT_FOREVER);
+        bool has_deadline = (period != backend::WAIT_FOREVER);
         Clock::time_point next_deadline = has_deadline ? (Clock::now() + std::chrono::duration_cast<Clock::duration>(period))
                                                        : Clock::time_point{};
 
         while (true)
         {
             // Compute wait for receive()
-            Millis wait_ms = RTOS_TASK_WAIT_FOREVER;
+            Millis wait_ms = backend::WAIT_FOREVER;
             if (has_deadline)
             {
                 auto now = Clock::now();
@@ -88,7 +87,7 @@ private:
 
                 // The handler may change the timeout policy; re-read and adjust.
                 Millis new_period = _receiveTimeoutMs;
-                if (new_period == RTOS_TASK_WAIT_FOREVER)
+                if (new_period == backend::WAIT_FOREVER)
                 {
                     has_deadline = false; // switch to blocking mode
                     continue;
@@ -114,7 +113,7 @@ private:
                 auto after = Clock::now();
                 Millis new_period = _receiveTimeoutMs;
 
-                if (new_period == RTOS_TASK_WAIT_FOREVER)
+                if (new_period == backend::WAIT_FOREVER)
                 {
                     has_deadline = false; // switch to blocking
                     continue;
@@ -148,9 +147,11 @@ private:
         }
     }
 
-    RtosMsgBuffer _msgQueue;
+    MsgBuffer _msgQueue;
     uint8_t _msg[MaxMsgSize]{};
-    RtosTask _task;
+    Task _task;
     Millis _receiveTimeoutMs;
     Millis _sendTimeoutMs;
 };
+
+} // namespace rtos

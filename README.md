@@ -34,8 +34,8 @@ Application code sees only `include/`. A backend is selected by compiling the so
 
 Each backend directory implements two porting surfaces:
 
-- `rtos_backend.cpp` implements the small procedural interface in `include/backend.hpp` (tasks, queues, message buffers, time, logging, GPIO, PSRAM, `AppInfo`). The portable classes such as `RtosTask` and `RtosQueue<T>` are written once against it.
-- `rtos_spi.cpp` / `rtos_i2c.cpp` implement the driver-like classes whose full interface is declared in `include/RtosSpi.hpp` and `include/RtosI2C.hpp`.
+- `rtos_backend.cpp` implements the small procedural interface in `include/rtos/backend.hpp` (tasks, queues, message buffers, time, logging, GPIO, PSRAM, `AppInfo`). The portable classes such as `rtos::Task` and `rtos::Queue<T>` are written once against it.
+- `rtos_spi.cpp` / `rtos_i2c.cpp` implement the driver-like classes whose full interface is declared in `include/rtos/Spi.hpp` and `include/rtos/I2C.hpp`.
 
 When adding new functionality, follow the same rule: simple handle-based primitives go through `backend.hpp` with one implementation per `rtos_backend.cpp`; richer driver-style classes get a complete class declaration in `include/` and a `backends/<backend>/rtos_<name>.cpp` per backend (stubs are fine for backends without support yet).
 
@@ -64,39 +64,39 @@ Use native platform APIs directly when you need:
 
 ## Core APIs
 
-### `RtosTask`
+### `rtos::Task`
 
-`RtosTask` wraps task creation, deletion, sleep, yield, current task lookup, and optional core pinning.
+`rtos::Task` wraps task creation, deletion, sleep, yield, current task lookup, and optional core pinning.
 
 ```cpp
-#include <RtosTask.hpp>
+#include "rtos/Task.hpp"
 
 static void worker(void *arg)
 {
     while (true)
     {
         // do work
-        RtosTask::sleep_ms(Millis{100});
+        rtos::Task::sleep_ms(Millis{100});
     }
 }
 
-RtosTask task("worker", 4096, 3, worker, nullptr);
+rtos::Task task("worker", 4096, 3, worker, nullptr);
 task.start();
 ```
 
-### `RtosQueue<T>`
+### `rtos::Queue<T>`
 
-`RtosQueue<T>` is a typed queue for trivially copyable values. It supports blocking, non-blocking, ISR send/receive variants, count/space introspection, and reset.
+`rtos::Queue<T>` is a typed queue for trivially copyable values. It supports blocking, non-blocking, ISR send/receive variants, count/space introspection, and reset.
 
 ```cpp
-#include <RtosQueue.hpp>
+#include "rtos/Queue.hpp"
 
 struct Sample
 {
     int value;
 };
 
-RtosQueue<Sample> queue(8);
+rtos::Queue<Sample> queue(8);
 queue.send(Sample{42});
 
 Sample sample{};
@@ -106,14 +106,14 @@ if (queue.receive(sample, 100))
 }
 ```
 
-### `RtosMsgBuffer`
+### `rtos::MsgBuffer`
 
-`RtosMsgBuffer` carries variable-size messages. It has a raw byte API plus typed helpers for trivially copyable objects.
+`rtos::MsgBuffer` carries variable-size messages. It has a raw byte API plus typed helpers for trivially copyable objects.
 
 ```cpp
-#include <RtosMsgBuffer.hpp>
+#include <rtos::MsgBuffer.hpp>
 
-RtosMsgBuffer messages(256);
+rtos::MsgBuffer messages(256);
 
 uint32_t value = 10;
 messages.send_obj(value);
@@ -122,12 +122,12 @@ uint32_t received{};
 messages.receive_obj(received);
 ```
 
-### `RtosMsgBufferTask`
+### `rtos::MsgBufferTask`
 
-`RtosMsgBufferTask<MaxMsgSize>` combines a task and a message buffer. Derive from it when a task should process commands or events from other tasks.
+`rtos::MsgBufferTask<MaxMsgSize>` combines a task and a message buffer. Derive from it when a task should process commands or events from other tasks.
 
 ```cpp
-#include <RtosMsgBufferTask.hpp>
+#include <rtos::MsgBufferTask.hpp>
 #include <QMsg.hpp>
 
 enum class WorkerCmd : uint32_t
@@ -141,11 +141,11 @@ struct SetValue
     int value;
 };
 
-class WorkerTask : public RtosMsgBufferTask<sizeof(QMsg<WorkerCmd, SetValue>)>
+class WorkerTask : public rtos::MsgBufferTask<sizeof(QMsg<WorkerCmd, SetValue>)>
 {
 public:
     WorkerTask()
-        : RtosMsgBufferTask("worker", 4096, 3, 256)
+        : rtos::MsgBufferTask("worker", 4096, 3, 256)
     {
     }
 
@@ -189,14 +189,14 @@ void app_main()
 }
 ```
 
-`receiveTimeout()` enables periodic timeout callbacks. Use `RTOS_TASK_WAIT_FOREVER` for the default blocking behavior.
+`receiveTimeout()` enables periodic timeout callbacks. Use `rtos::backend::WAIT_FOREVER` for the default blocking behavior.
 
 ### `rtos::time`
 
 `include/time.hpp` provides `std::chrono`-friendly duration aliases, a monotonic high-resolution clock, and task sleep helpers.
 
 ```cpp
-#include <time.hpp>
+#include "rtos/time.hpp"
 
 using namespace rtos::time;
 using namespace std::chrono_literals;
@@ -230,7 +230,7 @@ if (rtos::AppInfo::macAddress(mac))
 
 ### `MsgBus` and `Topic<T>`
 
-`MsgBus` provides a small typed publish/subscribe registry. Topics are long-lived, named values; subscribers receive topic updates through an `IRtosMsgReceiver`, commonly a `RtosMsgBufferTask`.
+`MsgBus` provides a small typed publish/subscribe registry. Topics are long-lived, named values; subscribers receive topic updates through an `rtos::IMsgReceiver`, commonly a `rtos::MsgBufferTask`.
 
 See [`include/MSGBUS.md`](include/MSGBUS.md) for the full API and usage model.
 
@@ -253,10 +253,10 @@ As an ESP-IDF component, add this repository under your project's `components/rt
 Typical project code should include the abstraction headers rather than native backend headers:
 
 ```cpp
-#include <RtosTask.hpp>
-#include <RtosQueue.hpp>
-#include <RtosMsgBufferTask.hpp>
-#include <time.hpp>
+#include "rtos/Task.hpp"
+#include "rtos/Queue.hpp"
+#include <rtos::MsgBufferTask.hpp>
+#include "rtos/time.hpp"
 ```
 
 Only backend code should normally include ESP-IDF, FreeRTOS, or Zephyr headers directly.

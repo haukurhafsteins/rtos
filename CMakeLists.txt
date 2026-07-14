@@ -5,7 +5,7 @@ idf_component_register(
         "backends/espidf/rtos_i2c.cpp"
         "src/rtos_common.cpp"
     INCLUDE_DIRS
-        "include" "include/statistics" "include/envelope"
+        "include"
     REQUIRES
         driver esp_timer esp_app_format
 )

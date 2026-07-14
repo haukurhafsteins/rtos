@@ -55,19 +55,19 @@ namespace rtos
         Verbose = RTOS_LOG_LEVEL_VERBOSE,
     };
 
-    struct IRtosLogSink
+    struct ILogSink
     {
-        virtual ~IRtosLogSink() = default;
+        virtual ~ILogSink() = default;
         virtual bool enabled(LogLevel) { return true; }
         virtual void write(LogLevel level, const char* tag, const char* line, size_t len) = 0;
     };
 
-    class RtosLog
+    class Log
     {
     public:
         using TimestampFn = uint32_t (*)();
 
-        static void addSink(IRtosLogSink& sink);
+        static void addSink(ILogSink& sink);
         static void clearSinks();
 
         static void setGlobalLevel(LogLevel lvl);
@@ -94,31 +94,31 @@ namespace rtos
 // ---------- User-facing macros (compile-time filtered) ----------
 
 #if RTOS_LOG_BUILD_LEVEL >= RTOS_LOG_LEVEL_ERROR
-#define RTOS_LOGE(TAG, FMT, ...) ::rtos::RtosLog::log(::rtos::LogLevel::Error,  TAG, FMT, ##__VA_ARGS__)
+#define RTOS_LOGE(TAG, FMT, ...) ::rtos::Log::log(::rtos::LogLevel::Error,  TAG, FMT, ##__VA_ARGS__)
 #else
 #define RTOS_LOGE(...) do{}while(0)
 #endif
 
 #if RTOS_LOG_BUILD_LEVEL >= RTOS_LOG_LEVEL_WARN
-#define RTOS_LOGW(TAG, FMT, ...) ::rtos::RtosLog::log(::rtos::LogLevel::Warn,   TAG, FMT, ##__VA_ARGS__)
+#define RTOS_LOGW(TAG, FMT, ...) ::rtos::Log::log(::rtos::LogLevel::Warn,   TAG, FMT, ##__VA_ARGS__)
 #else
 #define RTOS_LOGW(...) do{}while(0)
 #endif
 
 #if RTOS_LOG_BUILD_LEVEL >= RTOS_LOG_LEVEL_INFO
-#define RTOS_LOGI(TAG, FMT, ...) ::rtos::RtosLog::log(::rtos::LogLevel::Info,   TAG, FMT, ##__VA_ARGS__)
+#define RTOS_LOGI(TAG, FMT, ...) ::rtos::Log::log(::rtos::LogLevel::Info,   TAG, FMT, ##__VA_ARGS__)
 #else
 #define RTOS_LOGI(...) do{}while(0)
 #endif
 
 #if RTOS_LOG_BUILD_LEVEL >= RTOS_LOG_LEVEL_DEBUG
-#define RTOS_LOGD(TAG, FMT, ...) ::rtos::RtosLog::log(::rtos::LogLevel::Debug,  TAG, FMT, ##__VA_ARGS__)
+#define RTOS_LOGD(TAG, FMT, ...) ::rtos::Log::log(::rtos::LogLevel::Debug,  TAG, FMT, ##__VA_ARGS__)
 #else
 #define RTOS_LOGD(...) do{}while(0)
 #endif
 
 #if RTOS_LOG_BUILD_LEVEL >= RTOS_LOG_LEVEL_VERBOSE
-#define RTOS_LOGV(TAG, FMT, ...) ::rtos::RtosLog::log(::rtos::LogLevel::Verbose,TAG, FMT, ##__VA_ARGS__)
+#define RTOS_LOGV(TAG, FMT, ...) ::rtos::Log::log(::rtos::LogLevel::Verbose,TAG, FMT, ##__VA_ARGS__)
 #else
 #define RTOS_LOGV(...) do{}while(0)
 #endif

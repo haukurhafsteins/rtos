@@ -1,9 +1,11 @@
-// ESP-IDF backend for RtosI2CBus / RtosI2CDevice (i2c_master driver, IDF v5+).
+// ESP-IDF backend for I2CBus / I2CDevice (i2c_master driver, IDF v5+).
 
-#include "RtosI2C.hpp"
+#include "rtos/I2C.hpp"
 
 extern "C" {
 #include "driver/i2c_master.h"
+
+using namespace rtos;
 }
 
 namespace
@@ -20,10 +22,10 @@ i2c_master_dev_handle_t dev_handle(void* handle)
 } // namespace
 
 // ---------------------------------------------------------------------------
-// RtosI2CBus
+// I2CBus
 // ---------------------------------------------------------------------------
 
-bool RtosI2CBus::init(const Config& cfg)
+bool I2CBus::init(const Config& cfg)
 {
     i2c_master_bus_config_t bus_cfg = {};
     bus_cfg.i2c_port                     = static_cast<i2c_port_num_t>(cfg.port);
@@ -43,7 +45,7 @@ bool RtosI2CBus::init(const Config& cfg)
     return true;
 }
 
-void RtosI2CBus::deinit()
+void I2CBus::deinit()
 {
     if (handle_)
     {
@@ -53,10 +55,10 @@ void RtosI2CBus::deinit()
 }
 
 // ---------------------------------------------------------------------------
-// RtosI2CDevice
+// I2CDevice
 // ---------------------------------------------------------------------------
 
-bool RtosI2CDevice::init(RtosI2CBus& bus, const Config& cfg)
+bool I2CDevice::init(I2CBus& bus, const Config& cfg)
 {
     timeout_ms_ = cfg.timeout_ms;
 
@@ -73,7 +75,7 @@ bool RtosI2CDevice::init(RtosI2CBus& bus, const Config& cfg)
     return true;
 }
 
-void RtosI2CDevice::deinit()
+void I2CDevice::deinit()
 {
     if (handle_)
     {
@@ -82,17 +84,17 @@ void RtosI2CDevice::deinit()
     }
 }
 
-bool RtosI2CDevice::write(const uint8_t* data, size_t len)
+bool I2CDevice::write(const uint8_t* data, size_t len)
 {
     return i2c_master_transmit(dev_handle(handle_), data, len, timeout_ms_) == ESP_OK;
 }
 
-bool RtosI2CDevice::read(uint8_t* data, size_t len)
+bool I2CDevice::read(uint8_t* data, size_t len)
 {
     return i2c_master_receive(dev_handle(handle_), data, len, timeout_ms_) == ESP_OK;
 }
 
-bool RtosI2CDevice::write_read(const uint8_t* wr, size_t wr_len, uint8_t* rd, size_t rd_len)
+bool I2CDevice::write_read(const uint8_t* wr, size_t wr_len, uint8_t* rd, size_t rd_len)
 {
     return i2c_master_transmit_receive(dev_handle(handle_), wr, wr_len, rd, rd_len, timeout_ms_) == ESP_OK;
 }

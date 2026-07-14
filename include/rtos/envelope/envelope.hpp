@@ -30,7 +30,7 @@
 #include <tuple>
 #include <cstddef>
 
-namespace envelope {
+namespace rtos::envelope {
 
 // ---------------- Common types ----------------
 
@@ -603,4 +603,4 @@ inline EnvelopeArrayT<T,N,Time,Reduce,RulePEs...> make_envelopeArrayT(RulePEs&..
 }
 
 
-} // namespace envelope
+} // namespace rtos::envelope

@@ -173,7 +173,7 @@ Examples on a typical 32-bit MCU:
 ## Typical Wiring (CMake / Arduino / ESP-IDF)
 
 * **CMake**: add the header to your target include paths.
-* **Arduino**: place `MinMaxAvg.hpp` in your `src/` or library folder, then `#include "MinMaxAvg.hpp"`.
+* **Arduino**: place `MinMaxAvg.hpp` in your `src/` or library folder, then `#include "rtos/statistics/MinMaxAvg.hpp"`.
 * **ESP-IDF**: add to component `include/` and list the include directory in `CMakeLists.txt`.
 
 ---

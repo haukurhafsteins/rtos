@@ -3,7 +3,10 @@
 #include <cstddef>
 #include <type_traits>
 #include <limits>
-#include "MinMaxAvg.hpp"
+#include "rtos/statistics/MinMaxAvg.hpp"
+
+namespace rtos
+{
 
 template <typename T>
 class OnlineStatistics
@@ -115,3 +118,5 @@ private:
     T sum_squares_ = static_cast<T>(0);
     T peak_from_mean_ = static_cast<T>(0);
 };
+
+} // namespace rtos

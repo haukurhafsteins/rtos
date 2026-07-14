@@ -83,7 +83,7 @@ namespace rtos
 
         // Forward declaration to avoid dragging queue headers here
         template <typename T>
-        class RtosQueue;
+        class Queue;
 
         // Callback type (called in TASK CONTEXT — backends will de-bounce and defer)
         using Callback = std::function<void(const Event &)>;
@@ -102,7 +102,7 @@ namespace rtos
                 virtual void enable_interrupt(Trigger) = 0;
                 virtual void disable_interrupt() = 0;
                 virtual void set_callback(Callback) = 0;
-                virtual void attach_queue(RtosQueue<Event> *) = 0;
+                virtual void attach_queue(Queue<Event> *) = 0;
                 virtual void set_debounce_us(uint32_t) = 0;
             };
 
@@ -135,7 +135,7 @@ namespace rtos
 
             // Deliver events using one of these:
             void set_callback(Callback cb);
-            void attach_queue(RtosQueue<Event> *queue);
+            void attach_queue(Queue<Event> *queue);
 
             // Optional soft debounce (in microseconds). 0 disables.
             void set_debounce_us(uint32_t us);

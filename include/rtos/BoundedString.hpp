@@ -3,6 +3,9 @@
 #include <cstring>
 #include <stdexcept>
 
+namespace rtos
+{
+
 class BoundedString {
 public:
     // capacity_including_null is the total buffer size (including room for '\0')
@@ -79,3 +82,5 @@ private:
     std::size_t  cap_;   // total bytes, including '\0'
     std::size_t  len_;   // number of chars excluding '\0'
 };
+
+} // namespace rtos

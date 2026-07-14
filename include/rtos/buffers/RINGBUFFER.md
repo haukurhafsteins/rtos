@@ -7,7 +7,7 @@ Lightweight fixed-size FIFO with optional overwrite behavior and pluggable lock 
 - Create and initialize with external buffer:
 
 ```cpp
-#include "buffers/RingBuffer.hpp"
+#include "rtos/buffers/RingBuffer.hpp"
 
 constexpr std::size_t kCapacity = 16;
 int backing[kCapacity];

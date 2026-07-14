@@ -3,6 +3,9 @@
 #include <cstdint>
 #include <cstring>
 
+namespace rtos
+{
+
 struct NoData {};
 
 template <typename C, typename D = NoData>
@@ -23,3 +26,5 @@ public:
     D& getData() { return data; }
     const D* getData() const { return &data; }
 };
+
+} // namespace rtos

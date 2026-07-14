@@ -1,9 +1,9 @@
 #pragma once
 #include <string>
 #include <cstdio>
-#include "envelope/envelope.hpp"
+#include "rtos/envelope/envelope.hpp"
 
-namespace envelope {
+namespace rtos::envelope {
 
 // A generic kind that covers all built-in rule types
 enum class RuleKind : uint8_t {
@@ -139,4 +139,4 @@ inline std::string toJson(const RuleView<T>& v, bool pretty=false) {
     return s;
 }
 
-} // namespace envelope
+} // namespace rtos::envelope

@@ -1,10 +1,10 @@
 #pragma once
-#include "RtosLog.hpp"
+#include "rtos/Log.hpp"
 
 namespace rtos
 {
     // A minimal portable sink that prints the line verbatim to a C stdio stream.
-    class StdoutLogSink final : public IRtosLogSink
+    class StdoutLogSink final : public ILogSink
     {
     public:
         explicit StdoutLogSink(void* stream = nullptr) : _stream(stream) {}
@@ -14,14 +14,14 @@ namespace rtos
     };
 
     // For ESP-IDF (FreeRTOS on ESP32). Compiles only if ESP_PLATFORM is defined.
-    class EspIdfLogSink final : public IRtosLogSink
+    class EspIdfLogSink final : public ILogSink
     {
     public:
         void write(LogLevel level, const char* tag, const char* line, size_t len) override;
     };
 
     // For Zephyr: uses printk().
-    class ZephyrPrintkSink final : public IRtosLogSink
+    class ZephyrPrintkSink final : public ILogSink
     {
     public:
         void write(LogLevel level, const char* tag, const char* line, size_t len) override;

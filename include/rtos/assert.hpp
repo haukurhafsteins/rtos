@@ -1,4 +1,4 @@
-// include/rtos_assert.hpp
+// include/rtos/assert.hpp
 #pragma once
 
 #include <cstddef>

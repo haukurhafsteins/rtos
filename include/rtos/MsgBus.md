@@ -1,15 +1,15 @@
 # Message Bus: `TopicBase`, `Topic<T,Cmd>`, and `MsgBus`
 
-A tiny, header-only publish/subscribe message bus for RTOS-style systems. It lets producers publish typed payloads to a named **topic**, and lets consumers subscribe with their own command IDs. Delivery uses a user-provided `RtosMsgBuffer` queue and a simple `QMsg<Cmd, T>` envelope.
+A tiny, header-only publish/subscribe message bus for RTOS-style systems. It lets producers publish typed payloads to a named **topic**, and lets consumers subscribe with their own command IDs. Delivery uses a user-provided `rtos::MsgBuffer` queue and a simple `QMsg<Cmd, T>` envelope.
 
-> **Requires:** C++17 (uses `inline static`), a `RtosMsgBuffer` with `send(void*, size_t)` and a `QMsg<Cmd,T>` type exposing `size()`.
+> **Requires:** C++17 (uses `inline static`), a `rtos::MsgBuffer` with `send(void*, size_t)` and a `QMsg<Cmd,T>` type exposing `size()`.
 
 ---
 
 ## Overview
 
 - **Topics are named.** Each topic holds a pointer to external data (`const T*`) owned by the producer.
-- **Publishing = `notify()`.** When called, the topic wraps the current `T` into `QMsg<Cmd,T>` and sends it to each subscriber’s `RtosMsgBuffer`.
+- **Publishing = `notify()`.** When called, the topic wraps the current `T` into `QMsg<Cmd,T>` and sends it to each subscriber’s `rtos::MsgBuffer`.
 - **Subscribers register per-topic.** Each subscriber chooses its own command ID (cast to `uint32_t`). The same topic can send different command IDs to different subscribers.
 - **Central registry.** `MsgBus` keeps a global map from topic name → `TopicBase*`.
 
@@ -29,11 +29,11 @@ public:
     const char* getName() const;
     virtual bool notify() = 0;
 
-    void addSubscriber(RtosMsgBuffer& q, uint32_t msgId);
-    void removeSubscriber(RtosMsgBuffer& q);
+    void addSubscriber(rtos::MsgBuffer& q, uint32_t msgId);
+    void removeSubscriber(rtos::MsgBuffer& q);
 
 protected:
-    struct Sub { RtosMsgBuffer* q; uint32_t id; };
+    struct Sub { rtos::MsgBuffer* q; uint32_t id; };
     std::list<Sub> subs_;
 };
 ```
@@ -85,7 +85,7 @@ public:
     static bool remove(const char* name);
 
     template<typename C>
-    static bool subscribe(const char* name, RtosMsgBuffer& receiver, C msgId);
+    static bool subscribe(const char* name, rtos::MsgBuffer& receiver, C msgId);
 
     static TopicBase* get(const char* name);
 
@@ -141,7 +141,7 @@ auto* tempTopic = static_cast<Topic<Temperature, SensorCmd>*>(base);
 ### 3) Subscribe receivers (usually tasks) with their queues
 
 ```cpp
-extern RtosMsgBuffer tempConsumerQueue;
+extern rtos::MsgBuffer tempConsumerQueue;
 
 bool ok = MsgBus::subscribe("temp", tempConsumerQueue, SensorCmd::DataUpdated);
 ```
@@ -188,7 +188,7 @@ MsgBus::remove("temp"); // deletes the topic from the registry
 ## Thread-Safety & RTOS Considerations
 
 - **No internal locking.** `MsgBus` and `Topic` are **not** thread-safe. If multiple tasks add/remove/subscribe/notify concurrently, protect with a mutex.
-- **Queue backpressure:** `notify()` ignores `RtosMsgBuffer::send` return value. If your queue can block/fail, consider extending `notify()` or `RtosMsgBuffer` to report and handle failures.
+- **Queue backpressure:** `notify()` ignores `rtos::MsgBuffer::send` return value. If your queue can block/fail, consider extending `notify()` or `rtos::MsgBuffer` to report and handle failures.
 - **ISR context:** As written, `notify()` constructs a stack `QMsg` and calls `send`. Only use from ISR if your queue supports it and `send` is ISR-safe. Otherwise, call from task context.
 
 ---
@@ -199,7 +199,7 @@ MsgBus::remove("temp"); // deletes the topic from the registry
 - `MsgBus::subscribe` → `false` if topic missing.
 - `MsgBus::remove` → `false` if topic missing.
 - `Topic::notify` → `false` if `data_ == nullptr`, else `true`.
-- Delivery failures from `RtosMsgBuffer::send` are **not** propagated.
+- Delivery failures from `rtos::MsgBuffer::send` are **not** propagated.
 
 ---
 
@@ -239,7 +239,7 @@ auto* topicTemperature = MsgBus::add<Temperature, SensorCmd>("temp", SensorCmd::
 assert(topicTemperature && "topic name already in use");
 
 // Subscribe a consumer
-extern RtosMsgBuffer tempQueue;
+extern rtos::MsgBuffer tempQueue;
 bool subOk = MsgBus::subscribe("temp", tempQueue, SensorCmd::DataUpdated);
 assert(subOk);
 

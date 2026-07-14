@@ -1,7 +1,7 @@
 #include <atomic>
 #include <mutex>
 
-#include "Gpio.hpp"
+#include "rtos/Gpio.hpp"
 
 namespace rtos { namespace gpio {
 

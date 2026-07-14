@@ -1,16 +1,18 @@
-// ESP-IDF backend for RtosSpiBus / RtosSpiDevice (spi_master driver).
+// ESP-IDF backend for SpiBus / SpiDevice (spi_master driver).
 
-#include "RtosSpi.hpp"
+#include "rtos/Spi.hpp"
 
 extern "C" {
 #include "driver/spi_master.h"
+
+using namespace rtos;
 }
 
 namespace
 {
-spi_dma_chan_t to_native(RtosSpiBus::Dma dma)
+spi_dma_chan_t to_native(SpiBus::Dma dma)
 {
-    return dma == RtosSpiBus::Dma::Disabled ? SPI_DMA_DISABLED : SPI_DMA_CH_AUTO;
+    return dma == SpiBus::Dma::Disabled ? SPI_DMA_DISABLED : SPI_DMA_CH_AUTO;
 }
 
 spi_device_handle_t dev(void* handle)
@@ -20,10 +22,10 @@ spi_device_handle_t dev(void* handle)
 } // namespace
 
 // ---------------------------------------------------------------------------
-// RtosSpiBus
+// SpiBus
 // ---------------------------------------------------------------------------
 
-bool RtosSpiBus::init(const Config& cfg)
+bool SpiBus::init(const Config& cfg)
 {
     host_ = cfg.host;
 
@@ -42,7 +44,7 @@ bool RtosSpiBus::init(const Config& cfg)
     return true;
 }
 
-void RtosSpiBus::deinit()
+void SpiBus::deinit()
 {
     if (initialised_)
     {
@@ -52,12 +54,12 @@ void RtosSpiBus::deinit()
 }
 
 // ---------------------------------------------------------------------------
-// RtosSpiDevice
+// SpiDevice
 // All transfers use spi_device_polling_transmit (no task-notification
 // overhead).
 // ---------------------------------------------------------------------------
 
-bool RtosSpiDevice::init(RtosSpiBus& bus, const Config& cfg)
+bool SpiDevice::init(SpiBus& bus, const Config& cfg)
 {
     spi_device_interface_config_t dev_cfg = {};
     dev_cfg.command_bits   = cfg.command_bits;
@@ -77,7 +79,7 @@ bool RtosSpiDevice::init(RtosSpiBus& bus, const Config& cfg)
     return true;
 }
 
-void RtosSpiDevice::deinit()
+void SpiDevice::deinit()
 {
     if (handle_)
     {
@@ -86,7 +88,7 @@ void RtosSpiDevice::deinit()
     }
 }
 
-bool RtosSpiDevice::write(const uint8_t* data, size_t len)
+bool SpiDevice::write(const uint8_t* data, size_t len)
 {
     spi_transaction_t t = {};
     t.length    = len * 8;
@@ -94,7 +96,7 @@ bool RtosSpiDevice::write(const uint8_t* data, size_t len)
     return spi_device_polling_transmit(dev(handle_), &t) == ESP_OK;
 }
 
-bool RtosSpiDevice::read(uint8_t* buf, size_t len)
+bool SpiDevice::read(uint8_t* buf, size_t len)
 {
     spi_transaction_t t = {};
     t.length    = len * 8;
@@ -103,7 +105,7 @@ bool RtosSpiDevice::read(uint8_t* buf, size_t len)
     return spi_device_polling_transmit(dev(handle_), &t) == ESP_OK;
 }
 
-bool RtosSpiDevice::transfer(const uint8_t* tx, uint8_t* rx, size_t len)
+bool SpiDevice::transfer(const uint8_t* tx, uint8_t* rx, size_t len)
 {
     spi_transaction_t t = {};
     t.length    = len * 8;
@@ -112,7 +114,7 @@ bool RtosSpiDevice::transfer(const uint8_t* tx, uint8_t* rx, size_t len)
     return spi_device_polling_transmit(dev(handle_), &t) == ESP_OK;
 }
 
-bool RtosSpiDevice::transfer_cmd(uint16_t cmd, const uint8_t* tx, uint8_t* rx, size_t len)
+bool SpiDevice::transfer_cmd(uint16_t cmd, const uint8_t* tx, uint8_t* rx, size_t len)
 {
     spi_transaction_t t = {};
     t.cmd       = cmd;

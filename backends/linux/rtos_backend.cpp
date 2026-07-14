@@ -5,10 +5,10 @@
 #include <mutex>
 #include <thread>
 
-#include "AppInfo.hpp"
-#include "RtosLog.hpp"
-#include "RtosLogSinks.hpp"
-#include "rtos_psram.hpp"
+#include "rtos/AppInfo.hpp"
+#include "rtos/Log.hpp"
+#include "rtos/LogSinks.hpp"
+#include "rtos/psram.hpp"
 
 namespace
 {
@@ -18,36 +18,36 @@ struct TagRule
 	rtos::LogLevel level;
 };
 
-rtos::IRtosLogSink *s_sinks[RTOS_LOG_MAX_SINKS] = {};
+rtos::ILogSink *s_sinks[RTOS_LOG_MAX_SINKS] = {};
 std::size_t s_sinkCount = 0;
 rtos::LogLevel s_globalLevel = rtos::LogLevel::Info;
 TagRule s_rules[RTOS_LOG_MAX_TAG_RULES] = {};
 std::size_t s_ruleCount = 0;
-rtos::RtosLog::TimestampFn s_timestampProvider = nullptr;
+rtos::Log::TimestampFn s_timestampProvider = nullptr;
 std::mutex s_logMutex;
 }
 
 namespace rtos {
 
-void RtosLog::addSink(IRtosLogSink &sink)
+void Log::addSink(ILogSink &sink)
 {
 	std::lock_guard<std::mutex> lock(s_logMutex);
 	if (s_sinkCount < RTOS_LOG_MAX_SINKS)
 		s_sinks[s_sinkCount++] = &sink;
 }
 
-void RtosLog::clearSinks()
+void Log::clearSinks()
 {
 	std::lock_guard<std::mutex> lock(s_logMutex);
 	s_sinkCount = 0;
 	std::memset(s_sinks, 0, sizeof(s_sinks));
 }
 
-void RtosLog::setGlobalLevel(LogLevel lvl) { s_globalLevel = lvl; }
+void Log::setGlobalLevel(LogLevel lvl) { s_globalLevel = lvl; }
 
-LogLevel RtosLog::getGlobalLevel() { return s_globalLevel; }
+LogLevel Log::getGlobalLevel() { return s_globalLevel; }
 
-void RtosLog::setTagLevel(const char *tag, LogLevel lvl)
+void Log::setTagLevel(const char *tag, LogLevel lvl)
 {
 	if (!tag)
 		return;
@@ -66,7 +66,7 @@ void RtosLog::setTagLevel(const char *tag, LogLevel lvl)
 		s_rules[s_ruleCount++] = TagRule{tag, lvl};
 }
 
-LogLevel RtosLog::getTagLevel(const char *tag)
+LogLevel Log::getTagLevel(const char *tag)
 {
 	if (!tag)
 		return LogLevel::None;
@@ -81,9 +81,9 @@ LogLevel RtosLog::getTagLevel(const char *tag)
 	return LogLevel::None;
 }
 
-void RtosLog::setTimestampProvider(TimestampFn fn) { s_timestampProvider = fn; }
+void Log::setTimestampProvider(TimestampFn fn) { s_timestampProvider = fn; }
 
-char RtosLog::levelChar(LogLevel lvl)
+char Log::levelChar(LogLevel lvl)
 {
 	switch (lvl)
 	{
@@ -102,18 +102,18 @@ char RtosLog::levelChar(LogLevel lvl)
 	}
 }
 
-bool RtosLog::shouldEmit(LogLevel level, const char *tag)
+bool Log::shouldEmit(LogLevel level, const char *tag)
 {
 	LogLevel tagLevel = getTagLevel(tag);
 	LogLevel gate = (tagLevel != LogLevel::None) ? tagLevel : s_globalLevel;
 	return static_cast<int>(level) <= static_cast<int>(gate);
 }
 
-void RtosLog::lock() { s_logMutex.lock(); }
+void Log::lock() { s_logMutex.lock(); }
 
-void RtosLog::unlock() { s_logMutex.unlock(); }
+void Log::unlock() { s_logMutex.unlock(); }
 
-void RtosLog::vlog(LogLevel level, const char *tag, const char *fmt, va_list ap)
+void Log::vlog(LogLevel level, const char *tag, const char *fmt, va_list ap)
 {
 	if (!shouldEmit(level, tag))
 		return;
@@ -151,7 +151,7 @@ void RtosLog::vlog(LogLevel level, const char *tag, const char *fmt, va_list ap)
 	}
 }
 
-void RtosLog::log(LogLevel level, const char *tag, const char *fmt, ...)
+void Log::log(LogLevel level, const char *tag, const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
@@ -170,7 +170,7 @@ void StdoutLogSink::write(LogLevel, const char *, const char *line, size_t)
 
 namespace rtos::memory {
 
-void *rtos_psram_malloc(std::size_t size)
+void *psram_malloc(std::size_t size)
 {
 	void *ptr = std::malloc(size + sizeof(std::size_t));
 	if (!ptr)
@@ -179,7 +179,7 @@ void *rtos_psram_malloc(std::size_t size)
 	return static_cast<char *>(ptr) + sizeof(std::size_t);
 }
 
-void *rtos_psram_calloc(std::size_t num, std::size_t size)
+void *psram_calloc(std::size_t num, std::size_t size)
 {
 	void *ptr = std::calloc(1, num * size + sizeof(std::size_t));
 	if (!ptr)
@@ -188,10 +188,10 @@ void *rtos_psram_calloc(std::size_t num, std::size_t size)
 	return static_cast<char *>(ptr) + sizeof(std::size_t);
 }
 
-void *rtos_psram_realloc(void *ptr, std::size_t size)
+void *psram_realloc(void *ptr, std::size_t size)
 {
 	if (!ptr)
-		return rtos_psram_malloc(size);
+		return psram_malloc(size);
 	void *original = static_cast<char *>(ptr) - sizeof(std::size_t);
 	void *resized = std::realloc(original, size + sizeof(std::size_t));
 	if (!resized)
@@ -200,14 +200,14 @@ void *rtos_psram_realloc(void *ptr, std::size_t size)
 	return static_cast<char *>(resized) + sizeof(std::size_t);
 }
 
-void rtos_psram_free(void *ptr)
+void psram_free(void *ptr)
 {
 	if (!ptr)
 		return;
 	std::free(static_cast<char *>(ptr) - sizeof(std::size_t));
 }
 
-std::size_t rtos_psram_allocated_size(void *ptr)
+std::size_t psram_allocated_size(void *ptr)
 {
 	if (!ptr)
 		return 0;

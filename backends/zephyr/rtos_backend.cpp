@@ -63,7 +63,7 @@ public:
 
     void set_callback(Callback cb) override { cb_own_ = std::move(cb); }
 
-    void attach_queue(RtosQueue<Event>* q) override { queue_ = q; }
+    void attach_queue(Queue<Event>* q) override { queue_ = q; }
 
     void set_debounce_us(uint32_t us) override { debounce_us_ = us; }
 
@@ -103,13 +103,13 @@ private:
         if (self->cb_own_) self->cb_own_(self->last_event_);
     }
 
-    static void backend_queue_send_from_isr(RtosQueue<Event>*, const Event&) __attribute__((weak));
-    static void backend_queue_send_from_isr(RtosQueue<Event>*, const Event&) {}
+    static void backend_queue_send_from_isr(Queue<Event>*, const Event&) __attribute__((weak));
+    static void backend_queue_send_from_isr(Queue<Event>*, const Event&) {}
 
     gpio_dt_spec spec_{};
     Config cfg_{};
     Callback cb_own_{};
-    RtosQueue<Event>* queue_ = nullptr;
+    Queue<Event>* queue_ = nullptr;
     struct gpio_callback cb_{};
     struct k_work work_{};
     uint32_t debounce_us_ = 0;
@@ -135,7 +135,7 @@ void Pin::toggle() { static_cast<ZephyrImpl*>(impl_)->toggle(); }
 void Pin::enable_interrupt(Trigger t) { static_cast<ZephyrImpl*>(impl_)->enable_interrupt(t); }
 void Pin::disable_interrupt() { static_cast<ZephyrImpl*>(impl_)->disable_interrupt(); }
 void Pin::set_callback(Callback cb) { static_cast<ZephyrImpl*>(impl_)->set_callback(std::move(cb)); }
-void Pin::attach_queue(RtosQueue<Event>* q) { static_cast<ZephyrImpl*>(impl_)->attach_queue(q); }
+void Pin::attach_queue(Queue<Event>* q) { static_cast<ZephyrImpl*>(impl_)->attach_queue(q); }
 void Pin::set_debounce_us(uint32_t us) { static_cast<ZephyrImpl*>(impl_)->set_debounce_us(us); }
 
 } }

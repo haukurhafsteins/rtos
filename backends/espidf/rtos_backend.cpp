@@ -2,13 +2,13 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "backend.hpp"
-#include "time.hpp"
-#include "rtos_assert.hpp"
-#include "RtosLog.hpp"
-#include "RtosLogSinks.hpp"
-#include "Gpio.hpp"
-#include "AppInfo.hpp"
+#include "rtos/backend.hpp"
+#include "rtos/time.hpp"
+#include "rtos/assert.hpp"
+#include "rtos/Log.hpp"
+#include "rtos/LogSinks.hpp"
+#include "rtos/Gpio.hpp"
+#include "rtos/AppInfo.hpp"
 
 extern "C"
 {
@@ -340,14 +340,14 @@ namespace
         LogLevel level;
     };
 
-    IRtosLogSink *s_sinks[RTOS_LOG_MAX_SINKS] = {};
+    ILogSink *s_sinks[RTOS_LOG_MAX_SINKS] = {};
     size_t s_sinkCount = 0;
 
     LogLevel s_globalLevel = LogLevel::Info;
     TagRule s_rules[RTOS_LOG_MAX_TAG_RULES] = {};
     size_t s_ruleCount = 0;
 
-    RtosLog::TimestampFn s_ts = nullptr;
+    Log::TimestampFn s_ts = nullptr;
 
 #if RTOS_LOG_SHOW_FILELINE
     // Extract basename from __FILE__ strings stored in flash/ROM
@@ -363,8 +363,8 @@ namespace
 #endif
 }
 
-// ---- RtosLog impl ----
-void RtosLog::addSink(IRtosLogSink &sink)
+// ---- Log impl ----
+void Log::addSink(ILogSink &sink)
 {
     lock();
     if (s_sinkCount < RTOS_LOG_MAX_SINKS)
@@ -372,7 +372,7 @@ void RtosLog::addSink(IRtosLogSink &sink)
     unlock();
 }
 
-void RtosLog::clearSinks()
+void Log::clearSinks()
 {
     lock();
     s_sinkCount = 0;
@@ -380,10 +380,10 @@ void RtosLog::clearSinks()
     unlock();
 }
 
-void RtosLog::setGlobalLevel(LogLevel lvl) { s_globalLevel = lvl; }
-LogLevel RtosLog::getGlobalLevel() { return s_globalLevel; }
+void Log::setGlobalLevel(LogLevel lvl) { s_globalLevel = lvl; }
+LogLevel Log::getGlobalLevel() { return s_globalLevel; }
 
-void RtosLog::setTagLevel(const char *tag, LogLevel lvl)
+void Log::setTagLevel(const char *tag, LogLevel lvl)
 {
     if (!tag)
         return;
@@ -405,7 +405,7 @@ void RtosLog::setTagLevel(const char *tag, LogLevel lvl)
     unlock();
 }
 
-LogLevel RtosLog::getTagLevel(const char *tag)
+LogLevel Log::getTagLevel(const char *tag)
 {
     if (!tag)
         return LogLevel::None;
@@ -417,9 +417,9 @@ LogLevel RtosLog::getTagLevel(const char *tag)
     return LogLevel::None;
 }
 
-void RtosLog::setTimestampProvider(TimestampFn fn) { s_ts = fn; }
+void Log::setTimestampProvider(TimestampFn fn) { s_ts = fn; }
 
-char RtosLog::levelChar(LogLevel lvl)
+char Log::levelChar(LogLevel lvl)
 {
     switch (lvl)
     {
@@ -438,7 +438,7 @@ char RtosLog::levelChar(LogLevel lvl)
     }
 }
 
-bool RtosLog::shouldEmit(LogLevel level, const char *tag)
+bool Log::shouldEmit(LogLevel level, const char *tag)
 {
     // Runtime gates
     LogLevel tagLvl = getTagLevel(tag);
@@ -446,7 +446,7 @@ bool RtosLog::shouldEmit(LogLevel level, const char *tag)
     return static_cast<int>(level) <= static_cast<int>(gate);
 }
 
-void RtosLog::lock()
+void Log::lock()
 {
     if (xPortInIsrContext())
     {
@@ -458,7 +458,7 @@ void RtosLog::lock()
     }
 }
 
-void RtosLog::unlock()
+void Log::unlock()
 {
     if (xPortInIsrContext())
     {
@@ -470,7 +470,7 @@ void RtosLog::unlock()
     }
 }
 
-void RtosLog::vlog(LogLevel level, const char *tag, const char *fmt, va_list ap)
+void Log::vlog(LogLevel level, const char *tag, const char *fmt, va_list ap)
 {
     char line[RTOS_LOG_LINE_MAX];
     va_list ap_copy;
@@ -544,7 +544,7 @@ void RtosLog::vlog(LogLevel level, const char *tag, const char *fmt, va_list ap)
     //     unlock();
 }
 
-void RtosLog::log(LogLevel level, const char *tag, const char *fmt, ...)
+void Log::log(LogLevel level, const char *tag, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
@@ -703,7 +703,7 @@ namespace rtos
 
             void set_callback(Callback cb) override { cb_ = std::move(cb); }
 
-            void attach_queue(RtosQueue<Event> *q) override { queue_ = q; }
+            void attach_queue(Queue<Event> *q) override { queue_ = q; }
 
             void set_debounce_us(uint32_t us) override { debounce_us_ = us; }
 
@@ -786,7 +786,7 @@ namespace rtos
 
             gpio_num_t gpio_;
             Callback cb_{};
-            RtosQueue<Event> *queue_ = nullptr;
+            Queue<Event> *queue_ = nullptr;
             uint32_t debounce_us_ = 0;
             uint64_t last_isr_us_ = 0;
             uint32_t isr_count_ = 0;
@@ -794,7 +794,7 @@ namespace rtos
         public:
             // Back-end hooks to be provided by your RTOS layer so we keep this file
             // free from queue/task headers.
-            static void backend_queue_send_from_isr(RtosQueue<Event> *q, const Event &ev);
+            static void backend_queue_send_from_isr(Queue<Event> *q, const Event &ev);
             static void backend_defer_to_task(std::function<void()> fn);
         };
 
@@ -805,9 +805,9 @@ namespace rtos
         }
 
         // Default weak hooks — user must provide real implementations in rtos glue
-        // void EspIdfImpl::backend_queue_send_from_isr(RtosQueue<Event> *, const Event &) __attribute__((weak));
+        // void EspIdfImpl::backend_queue_send_from_isr(Queue<Event> *, const Event &) __attribute__((weak));
         // void EspIdfImpl::backend_defer_to_task(std::function<void()>) __attribute__((weak));
-        void EspIdfImpl::backend_queue_send_from_isr(RtosQueue<Event> *, const Event &) {}
+        void EspIdfImpl::backend_queue_send_from_isr(Queue<Event> *, const Event &) {}
         void EspIdfImpl::backend_defer_to_task(std::function<void()>) {}
 
         // Factory for ESP-IDF
@@ -844,7 +844,7 @@ namespace rtos
         void Pin::enable_interrupt(Trigger t) { static_cast<EspIdfImpl *>(impl_)->enable_interrupt(t); }
         void Pin::disable_interrupt() { static_cast<EspIdfImpl *>(impl_)->disable_interrupt(); }
         void Pin::set_callback(Callback cb) { static_cast<EspIdfImpl *>(impl_)->set_callback(std::move(cb)); }
-        void Pin::attach_queue(RtosQueue<Event> *q) { static_cast<EspIdfImpl *>(impl_)->attach_queue(q); }
+        void Pin::attach_queue(Queue<Event> *q) { static_cast<EspIdfImpl *>(impl_)->attach_queue(q); }
         void Pin::set_debounce_us(uint32_t us) { static_cast<EspIdfImpl *>(impl_)->set_debounce_us(us); }
 
     }
@@ -857,7 +857,7 @@ namespace rtos::memory
     //-----------------------------------------------------------------------------
     static const char *PSRAM_TAG = "PSRAM";
 
-    void *rtos_psram_malloc(std::size_t size)
+    void *psram_malloc(std::size_t size)
     {
         void *ptr = heap_caps_malloc(size + sizeof(size_t), MALLOC_CAP_SPIRAM);
         if (ptr == NULL)
@@ -867,14 +867,14 @@ namespace rtos::memory
         }
         if (size > 1024 * 1024)
         {
-            RTOS_LOGW(PSRAM_TAG, "rtos_psram_malloc: Large allocation of %zu bytes", size);
+            RTOS_LOGW(PSRAM_TAG, "psram_malloc: Large allocation of %zu bytes", size);
         }
         // Store the size at the beginning
         *((size_t *)ptr) = size;
         return (char *)ptr + sizeof(size_t);
     }
 
-    void rtos_psram_free(void *ptr)
+    void psram_free(void *ptr)
     {
         if (ptr == NULL)
             return;
@@ -883,7 +883,7 @@ namespace rtos::memory
         heap_caps_free(original_ptr);
     }
 
-    void *rtos_psram_calloc(std::size_t num, std::size_t size)
+    void *psram_calloc(std::size_t num, std::size_t size)
     {
         void *ptr = heap_caps_calloc(1, num * size + sizeof(size_t), MALLOC_CAP_SPIRAM);
         if (ptr == NULL)
@@ -893,18 +893,18 @@ namespace rtos::memory
         }
         if (num * size > 1024 * 1024)
         {
-            RTOS_LOGW(PSRAM_TAG, "rtos_psram_calloc: Large allocation of %zu bytes", num * size);
+            RTOS_LOGW(PSRAM_TAG, "psram_calloc: Large allocation of %zu bytes", num * size);
         }
         // Store the size at the beginning
         *((size_t *)ptr) = num * size;
         return (char *)ptr + sizeof(size_t);
     }
 
-    void *rtos_psram_realloc(void *ptr, std::size_t size)
+    void *psram_realloc(void *ptr, std::size_t size)
     {
         if (ptr == NULL)
         {
-            return rtos_psram_malloc(size);
+            return psram_malloc(size);
         }
         // Adjust the pointer back to the original allocation
         void *original_ptr = (char *)ptr - sizeof(size_t);
@@ -919,7 +919,7 @@ namespace rtos::memory
         return (char *)newPtr + sizeof(size_t);
     }
 
-    std::size_t rtos_psram_allocated_size(void *ptr)
+    std::size_t psram_allocated_size(void *ptr)
     {
         if (ptr == NULL)
             return 0;
@@ -929,22 +929,22 @@ namespace rtos::memory
         return *size;
     }
 
-    int rtos_psram_get_free_size()
+    int psram_get_free_size()
     {
         return heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
     }
 
-    int rtos_psram_roundup(int size)
+    int psram_roundup(int size)
     {
         return (size + sizeof(long long) - 1) & ~(sizeof(long long) - 1);
     }
 
-    int rtos_psram_init(void *notUsed)
+    int psram_init(void *notUsed)
     {
         return 0;
     }
 
-    void rtos_psram_shutdown(void *notUsed)
+    void psram_shutdown(void *notUsed)
     {
     }
 }

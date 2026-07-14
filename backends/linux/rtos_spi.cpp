@@ -1,15 +1,17 @@
-// Linux host stub for RtosSpiBus / RtosSpiDevice.
+// Linux host stub for SpiBus / SpiDevice.
 // Used for host-side unit tests and utilities. No real SPI hardware access;
 // all operations are no-ops that return false.
 
-#include "RtosSpi.hpp"
+#include "rtos/Spi.hpp"
 
-bool RtosSpiBus::init(const Config&) { return false; }
-void RtosSpiBus::deinit() {}
+using namespace rtos;
 
-bool RtosSpiDevice::init(RtosSpiBus&, const Config&) { return false; }
-void RtosSpiDevice::deinit() {}
-bool RtosSpiDevice::write(const uint8_t*, size_t) { return false; }
-bool RtosSpiDevice::read(uint8_t*, size_t) { return false; }
-bool RtosSpiDevice::transfer(const uint8_t*, uint8_t*, size_t) { return false; }
-bool RtosSpiDevice::transfer_cmd(uint16_t, const uint8_t*, uint8_t*, size_t) { return false; }
+bool SpiBus::init(const Config&) { return false; }
+void SpiBus::deinit() {}
+
+bool SpiDevice::init(SpiBus&, const Config&) { return false; }
+void SpiDevice::deinit() {}
+bool SpiDevice::write(const uint8_t*, size_t) { return false; }
+bool SpiDevice::read(uint8_t*, size_t) { return false; }
+bool SpiDevice::transfer(const uint8_t*, uint8_t*, size_t) { return false; }
+bool SpiDevice::transfer_cmd(uint16_t, const uint8_t*, uint8_t*, size_t) { return false; }

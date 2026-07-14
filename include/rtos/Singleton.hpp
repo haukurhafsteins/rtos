@@ -1,6 +1,9 @@
-// SingletonTaskTemplate.hpp
+// Singleton.hpp
 #pragma once
-#include "rtos_assert.hpp"
+#include "rtos/assert.hpp"
+
+namespace rtos
+{
 
 template <typename Derived>
 class Singleton {
@@ -22,3 +25,5 @@ protected:
     Singleton() = default;
     static inline Derived* _instance = nullptr; // C++17 inline var avoids separate definition
 };
+
+} // namespace rtos

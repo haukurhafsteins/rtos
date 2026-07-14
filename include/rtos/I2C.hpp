@@ -16,11 +16,14 @@
 //   - linux:  compile-only stub, all operations return false
 // ---------------------------------------------------------------------------
 
+namespace rtos
+{
+
 // ---------------------------------------------------------------------------
-// RtosI2CBus
+// I2CBus
 // One instance per physical I2C port. Non-copyable, movable.
 // ---------------------------------------------------------------------------
-class RtosI2CBus
+class I2CBus
 {
 public:
     struct Config
@@ -32,21 +35,21 @@ public:
         uint8_t glitch_filter_cnt = 7;
     };
 
-    RtosI2CBus() = default;
+    I2CBus() = default;
 
-    RtosI2CBus(const RtosI2CBus&)            = delete;
-    RtosI2CBus& operator=(const RtosI2CBus&) = delete;
+    I2CBus(const I2CBus&)            = delete;
+    I2CBus& operator=(const I2CBus&) = delete;
 
-    RtosI2CBus(RtosI2CBus&& other) noexcept
+    I2CBus(I2CBus&& other) noexcept
         : handle_(other.handle_) { other.handle_ = nullptr; }
 
-    RtosI2CBus& operator=(RtosI2CBus&& other) noexcept
+    I2CBus& operator=(I2CBus&& other) noexcept
     {
         if (this != &other) { deinit(); handle_ = other.handle_; other.handle_ = nullptr; }
         return *this;
     }
 
-    ~RtosI2CBus() { deinit(); }
+    ~I2CBus() { deinit(); }
 
     /// Initialise the I2C master bus. Returns true on success.
     bool init(const Config& cfg);
@@ -64,10 +67,10 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// RtosI2CDevice
+// I2CDevice
 // One instance per device address on a bus. Non-copyable, movable.
 // ---------------------------------------------------------------------------
-class RtosI2CDevice
+class I2CDevice
 {
 public:
     struct Config
@@ -78,16 +81,16 @@ public:
         int      timeout_ms = 100;     ///< Operation timeout
     };
 
-    RtosI2CDevice() = default;
+    I2CDevice() = default;
 
-    RtosI2CDevice(const RtosI2CDevice&)            = delete;
-    RtosI2CDevice& operator=(const RtosI2CDevice&) = delete;
+    I2CDevice(const I2CDevice&)            = delete;
+    I2CDevice& operator=(const I2CDevice&) = delete;
 
-    RtosI2CDevice(RtosI2CDevice&& other) noexcept
+    I2CDevice(I2CDevice&& other) noexcept
         : handle_(other.handle_), timeout_ms_(other.timeout_ms_)
     { other.handle_ = nullptr; }
 
-    RtosI2CDevice& operator=(RtosI2CDevice&& other) noexcept
+    I2CDevice& operator=(I2CDevice&& other) noexcept
     {
         if (this != &other)
         {
@@ -99,10 +102,10 @@ public:
         return *this;
     }
 
-    ~RtosI2CDevice() { deinit(); }
+    ~I2CDevice() { deinit(); }
 
     /// Register this device on the given bus. Returns true on success.
-    bool init(RtosI2CBus& bus, const Config& cfg);
+    bool init(I2CBus& bus, const Config& cfg);
 
     /// Remove the device from the bus. Safe to call when not initialised.
     void deinit();
@@ -129,3 +132,5 @@ private:
     void* handle_     = nullptr;
     int   timeout_ms_ = 100;
 };
+
+} // namespace rtos

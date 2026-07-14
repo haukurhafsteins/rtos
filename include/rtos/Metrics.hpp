@@ -1,6 +1,9 @@
 #pragma once
 #include <array>
 
+namespace rtos
+{
+
 struct Metrics
 {
     enum class Unit : int32_t
@@ -56,3 +59,5 @@ struct Metrics
         }
     }
 };
+
+} // namespace rtos

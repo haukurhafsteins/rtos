@@ -4,8 +4,8 @@
 
 | Class | Wraps |
 |---|---|
-| `RtosI2CBus` | One physical I2C port (shared by all devices on that bus) |
-| `RtosI2CDevice` | One device address on a bus |
+| `rtos::I2CBus` | One physical I2C port (shared by all devices on that bus) |
+| `rtos::I2CDevice` | One device address on a bus |
 
 Both classes are non-copyable and movable. All I/O operations return `bool` (`true` = success).
 
@@ -20,10 +20,10 @@ Both classes are non-copyable and movable. All I/O operations return `bool` (`tr
 ## Include
 
 ```cpp
-#include <RtosI2C.hpp>
+#include "rtos/I2C.hpp"
 ```
 
-## RtosI2CBus
+## rtos::I2CBus
 
 ### Config
 
@@ -40,9 +40,9 @@ struct Config {
 ### Lifecycle
 
 ```cpp
-RtosI2CBus bus;
+rtos::I2CBus bus;
 
-RtosI2CBus::Config bus_cfg;
+rtos::I2CBus::Config bus_cfg;
 bus_cfg.port    = 0;           // I2C_NUM_0
 bus_cfg.sda_pin = 21;
 bus_cfg.scl_pin = 22;
@@ -57,7 +57,7 @@ bus.deinit();                  // also called automatically by destructor
 
 `init()` may be called only once. To re-initialise, call `deinit()` first or move a new instance into place.
 
-## RtosI2CDevice
+## rtos::I2CDevice
 
 ### Config
 
@@ -73,9 +73,9 @@ struct Config {
 ### Lifecycle
 
 ```cpp
-RtosI2CDevice dev;
+rtos::I2CDevice dev;
 
-RtosI2CDevice::Config dev_cfg;
+rtos::I2CDevice::Config dev_cfg;
 dev_cfg.address    = 0x48;
 dev_cfg.clk_hz     = 400000;
 dev_cfg.timeout_ms = 50;
@@ -125,7 +125,7 @@ bool ok = dev.write_read(&reg, 1, result, sizeof(result));
 ## Full example
 
 ```cpp
-#include <RtosI2C.hpp>
+#include "rtos/I2C.hpp"
 
 // Board-level constants
 static constexpr int I2C_PORT = 0;
@@ -136,18 +136,18 @@ static constexpr int PIN_SCL  = 22;
 static constexpr uint16_t SENSOR_ADDR = 0x48;
 
 // Allocate as member variables or statics — not on the stack of a short-lived scope
-static RtosI2CBus    g_bus;
-static RtosI2CDevice g_sensor;
+static rtos::I2CBus    g_bus;
+static rtos::I2CDevice g_sensor;
 
 void app_init()
 {
-    RtosI2CBus::Config bus_cfg;
+    rtos::I2CBus::Config bus_cfg;
     bus_cfg.port    = I2C_PORT;
     bus_cfg.sda_pin = PIN_SDA;
     bus_cfg.scl_pin = PIN_SCL;
     g_bus.init(bus_cfg);
 
-    RtosI2CDevice::Config dev_cfg;
+    rtos::I2CDevice::Config dev_cfg;
     dev_cfg.address    = SENSOR_ADDR;
     dev_cfg.timeout_ms = 50;
     g_sensor.init(g_bus, dev_cfg);
@@ -174,4 +174,4 @@ i2c_master_bus_handle_t raw_bus = g_bus.native();
 i2c_master_dev_handle_t raw_dev = g_sensor.native();
 ```
 
-Prefer migrating callers to `RtosI2CDevice` rather than relying on this long-term.
+Prefer migrating callers to `rtos::I2CDevice` rather than relying on this long-term.
