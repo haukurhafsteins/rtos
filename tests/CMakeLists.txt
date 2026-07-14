@@ -34,7 +34,9 @@ include(GoogleTest)
 
 add_library(rtos_host_support STATIC
     ../src/rtos_common.cpp
-    ../src/rtos_linux.cpp
+    ../backends/linux/rtos_backend.cpp
+    ../backends/linux/rtos_spi.cpp
+    ../backends/linux/rtos_i2c.cpp
 )
 
 target_include_directories(rtos_host_support

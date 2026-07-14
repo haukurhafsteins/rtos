@@ -1,9 +1,11 @@
 idf_component_register(
-    SRCS 
-        "src/rtos_freertos_espidf.cpp" "src/rtos_common.cpp"
+    SRCS
+        "backends/espidf/rtos_backend.cpp"
+        "backends/espidf/rtos_spi.cpp"
+        "backends/espidf/rtos_i2c.cpp"
+        "src/rtos_common.cpp"
     INCLUDE_DIRS
-        "." "include" "include/statistics" "include/envelope"
+        "include" "include/statistics" "include/envelope"
     REQUIRES
-        # other components you need (e.g. freertos, driver, esp_timer)
-        driver esp_timer i2cdev esp_app_format
+        driver esp_timer esp_app_format
 )

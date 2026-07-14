@@ -19,25 +19,27 @@ The current focus is:
 - application build and device information (`AppInfo`)
 - small embedded utilities such as `QMsg`, `Singleton`, fixed strings, ring buffers, envelopes, and online statistics
 
-## Supported Backends
+## Layout and Supported Backends
 
-The component is structured around a small backend interface in `include/backend.hpp`.
-
-Current backend code exists for:
-
-- ESP-IDF / FreeRTOS
-- Zephyr
-- Linux host support for selected utilities and tests
-
-Select the target backend with compile definitions used by the headers:
-
-```cmake
-target_compile_definitions(your_target PRIVATE USE_FREERTOS)
-# or
-target_compile_definitions(your_target PRIVATE USE_ZEPHYR)
+```text
+include/           portable public headers — the complete API, no backend code
+src/               portable implementation shared by all backends
+backends/espidf/   ESP-IDF / FreeRTOS backend (full support)
+backends/zephyr/   Zephyr backend (core primitives; SPI/I2C are compile-only stubs)
+backends/linux/    Linux host backend for utilities and tests (SPI/I2C are compile-only stubs)
+tests/             host-side unit tests
 ```
 
-The top-level `CMakeLists.txt` is currently set up as an ESP-IDF component and builds the ESP-IDF/FreeRTOS backend sources.
+Application code sees only `include/`. A backend is selected by compiling the sources of exactly one `backends/<backend>/` directory together with `src/rtos_common.cpp` — the headers contain no backend conditionals, so no `USE_*` compile definitions are needed.
+
+Each backend directory implements two porting surfaces:
+
+- `rtos_backend.cpp` implements the small procedural interface in `include/backend.hpp` (tasks, queues, message buffers, time, logging, GPIO, PSRAM, `AppInfo`). The portable classes such as `RtosTask` and `RtosQueue<T>` are written once against it.
+- `rtos_spi.cpp` / `rtos_i2c.cpp` implement the driver-like classes whose full interface is declared in `include/RtosSpi.hpp` and `include/RtosI2C.hpp`.
+
+When adding new functionality, follow the same rule: simple handle-based primitives go through `backend.hpp` with one implementation per `rtos_backend.cpp`; richer driver-style classes get a complete class declaration in `include/` and a `backends/<backend>/rtos_<name>.cpp` per backend (stubs are fine for backends without support yet).
+
+The top-level `CMakeLists.txt` is currently set up as an ESP-IDF component and builds the `backends/espidf` sources.
 
 ## Design Scope
 
@@ -208,7 +210,7 @@ See [`include/TIME.md`](include/TIME.md) for more detail.
 
 ### `AppInfo`
 
-`AppInfo` exposes the firmware build description, chip details, and the factory MAC address. Unlike `RtosSpi.hpp`, the full interface is declared in [`include/AppInfo.hpp`](include/AppInfo.hpp); each backend implements it in its `src/rtos_*.cpp` file (ESP-IDF reads `esp_app_get_description()`, `esp_chip_info()`, and the eFuse MAC; the Linux host backend returns compile-time fallbacks).
+`AppInfo` exposes the firmware build description, chip details, and the factory MAC address. The full interface is declared in [`include/AppInfo.hpp`](include/AppInfo.hpp); each backend implements it in its `backends/<backend>/rtos_backend.cpp` file (ESP-IDF reads `esp_app_get_description()`, `esp_chip_info()`, and the eFuse MAC; the Linux host backend returns compile-time fallbacks).
 
 ```cpp
 #include <AppInfo.hpp>
