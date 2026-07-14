@@ -16,6 +16,7 @@ The current focus is:
 - GPIO and PSRAM helpers where supported by the backend
 - I2C master bus and device
 - SPI master bus and device
+- application build and device information (`AppInfo`)
 - small embedded utilities such as `QMsg`, `Singleton`, fixed strings, ring buffers, envelopes, and online statistics
 
 ## Supported Backends
@@ -205,6 +206,26 @@ auto elapsed = std::chrono::duration_cast<Micros>(HighResClock::now() - start);
 
 See [`include/TIME.md`](include/TIME.md) for more detail.
 
+### `AppInfo`
+
+`AppInfo` exposes the firmware build description, chip details, and the factory MAC address. Unlike `RtosSpi.hpp`, the full interface is declared in [`include/AppInfo.hpp`](include/AppInfo.hpp); each backend implements it in its `src/rtos_*.cpp` file (ESP-IDF reads `esp_app_get_description()`, `esp_chip_info()`, and the eFuse MAC; the Linux host backend returns compile-time fallbacks).
+
+```cpp
+#include <AppInfo.hpp>
+
+const auto &desc = rtos::AppInfo::description();
+// desc.projectName, desc.version, desc.buildDate, desc.buildTime, desc.sdkVersion
+
+const auto &chip = rtos::AppInfo::chip();
+// chip.model, chip.cores, chip.revision, chip.wifi, chip.bluetoothLe, ...
+
+uint8_t mac[rtos::AppInfo::MacSize];
+if (rtos::AppInfo::macAddress(mac))
+{
+    // e.g. derive a serial number string from the MAC
+}
+```
+
 ### `MsgBus` and `Topic<T>`
 
 `MsgBus` provides a small typed publish/subscribe registry. Topics are long-lived, named values; subscribers receive topic updates through an `IRtosMsgReceiver`, commonly a `RtosMsgBufferTask`.
@@ -219,6 +240,8 @@ Additional utility headers live under `include/`:
 - [`include/envelope/ENVELOPE.md`](include/envelope/ENVELOPE.md)
 - [`include/Gpio.md`](include/Gpio.md)
 - [`include/RTOS_PSRAM_README.md`](include/RTOS_PSRAM_README.md)
+- [`RTOS_SPI.md`](RTOS_SPI.md)
+- [`I2C.md`](I2C.md)
 - [`include/statistics/MinMaxAvg.md`](include/statistics/MinMaxAvg.md)
 
 ## ESP-IDF Usage

@@ -8,6 +8,7 @@
 #include "RtosLog.hpp"
 #include "RtosLogSinks.hpp"
 #include "Gpio.hpp"
+#include "AppInfo.hpp"
 
 extern "C"
 {
@@ -23,6 +24,9 @@ extern "C"
 #include <esp_timer.h>
 #include <esp_log.h>
 #include <driver/gpio.h>
+#include <esp_app_desc.h>
+#include <esp_chip_info.h>
+#include <esp_mac.h>
 
 static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -944,3 +948,54 @@ namespace rtos::memory
     {
     }
 }
+
+//-----------------------------------------------------------------------------
+// AppInfo
+//-----------------------------------------------------------------------------
+namespace rtos
+{
+    const AppInfo::Description &AppInfo::description()
+    {
+        static const Description desc = []
+        {
+            Description d{};
+            const esp_app_desc_t *app = esp_app_get_description();
+            snprintf(d.projectName, sizeof(d.projectName), "%s", app->project_name);
+            snprintf(d.version, sizeof(d.version), "%s", app->version);
+            snprintf(d.buildDate, sizeof(d.buildDate), "%s", app->date);
+            snprintf(d.buildTime, sizeof(d.buildTime), "%s", app->time);
+            snprintf(d.sdkVersion, sizeof(d.sdkVersion), "%s", app->idf_ver);
+            return d;
+        }();
+        return desc;
+    }
+
+    const AppInfo::Chip &AppInfo::chip()
+    {
+        static const Chip chip = []
+        {
+            Chip c{};
+            esp_chip_info_t info{};
+            esp_chip_info(&info);
+            snprintf(c.model, sizeof(c.model), "%s", CONFIG_IDF_TARGET);
+            c.revision = info.revision;
+            c.cores = info.cores;
+            c.wifi = (info.features & CHIP_FEATURE_WIFI_BGN) != 0;
+            c.bluetoothLe = (info.features & CHIP_FEATURE_BLE) != 0;
+            c.bluetoothClassic = (info.features & CHIP_FEATURE_BT) != 0;
+            c.ieee802154 = (info.features & CHIP_FEATURE_IEEE802154) != 0;
+            c.embeddedFlash = (info.features & CHIP_FEATURE_EMB_FLASH) != 0;
+            c.embeddedPsram = (info.features & CHIP_FEATURE_EMB_PSRAM) != 0;
+            return c;
+        }();
+        return chip;
+    }
+
+    bool AppInfo::macAddress(uint8_t (&mac)[MacSize])
+    {
+        if (esp_efuse_mac_get_default(mac) == ESP_OK)
+            return true;
+        memset(mac, 0, MacSize);
+        return false;
+    }
+} // namespace rtos

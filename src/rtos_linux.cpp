@@ -3,7 +3,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <thread>
 
+#include "AppInfo.hpp"
 #include "RtosLog.hpp"
 #include "RtosLogSinks.hpp"
 #include "rtos_psram.hpp"
@@ -210,6 +212,42 @@ std::size_t rtos_psram_allocated_size(void *ptr)
 	if (!ptr)
 		return 0;
 	return *reinterpret_cast<std::size_t *>(static_cast<char *>(ptr) - sizeof(std::size_t));
+}
+
+}
+
+namespace rtos {
+
+// Host builds have no firmware image to describe; report compile-time
+// fallbacks so code using AppInfo still runs in tests.
+const AppInfo::Description &AppInfo::description()
+{
+	static const Description desc = [] {
+		Description d{};
+		std::snprintf(d.projectName, sizeof(d.projectName), "host");
+		std::snprintf(d.buildDate, sizeof(d.buildDate), "%s", __DATE__);
+		std::snprintf(d.buildTime, sizeof(d.buildTime), "%s", __TIME__);
+		std::snprintf(d.sdkVersion, sizeof(d.sdkVersion), "linux");
+		return d;
+	}();
+	return desc;
+}
+
+const AppInfo::Chip &AppInfo::chip()
+{
+	static const Chip chip = [] {
+		Chip c{};
+		std::snprintf(c.model, sizeof(c.model), "linux-host");
+		c.cores = static_cast<uint8_t>(std::thread::hardware_concurrency());
+		return c;
+	}();
+	return chip;
+}
+
+bool AppInfo::macAddress(uint8_t (&mac)[MacSize])
+{
+	std::memset(mac, 0, MacSize);
+	return false;
 }
 
 }
