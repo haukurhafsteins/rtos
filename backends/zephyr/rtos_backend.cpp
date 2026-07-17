@@ -139,3 +139,10 @@ void Pin::attach_queue(Queue<Event>* q) { static_cast<ZephyrImpl*>(impl_)->attac
 void Pin::set_debounce_us(uint32_t us) { static_cast<ZephyrImpl*>(impl_)->set_debounce_us(us); }
 
 } }
+
+#include "rtos/backend.hpp"
+
+// Platform bring-up: Zephyr's kernel and devicetree-driven drivers are
+// initialized before main() runs, so there is nothing to install here.
+// Present so portable app code can unconditionally call rtos::backend::init().
+bool rtos::backend::init() noexcept { return true; }

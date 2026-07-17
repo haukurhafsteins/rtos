@@ -15,6 +15,15 @@ namespace rtos::backend
     // ========= Common =========
     inline constexpr Millis WAIT_FOREVER = Millis::max();
 
+    // ===== Platform bring-up =====
+    // One-time system initialization the backend needs before any other rtos
+    // facility is used (e.g. espidf: GPIO ISR dispatch service + default event
+    // loop). Deliberately NOT a cross-platform event/ISR API: those are
+    // backend-internal services with no platform-neutral meaning - app-level
+    // messaging stays on MsgBus. Idempotent, call it first thing in main.
+    // Returns false only if the platform is left unusable.
+    bool init() noexcept;
+
     // ===== Task backend (already present) =====
     using TaskHandle = void *;
     bool task_create(TaskHandle &out_handle, const char *name, uint32_t stack_size_bytes, uint32_t priority, TaskFunction func, void *arg) noexcept;
