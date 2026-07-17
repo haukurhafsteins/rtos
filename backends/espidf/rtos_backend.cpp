@@ -23,6 +23,7 @@ extern "C"
 
 #include <esp_timer.h>
 #include <esp_log.h>
+#include <esp_event.h>
 #include <driver/gpio.h>
 #include <esp_app_desc.h>
 #include <esp_chip_info.h>
@@ -49,6 +50,25 @@ namespace
 
 namespace rtos::backend
 {
+    bool init() noexcept
+    {
+        // GPIO ISR dispatch service: required before any per-pin ISR handler
+        // (rtos::Gpio interrupts, app touch/tap IRQs). INVALID_STATE means a
+        // previous call already installed it - fine, init() is idempotent.
+        esp_err_t err = gpio_install_isr_service(0);
+        if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
+            return false;
+
+        // Default event loop: esp-idf system services (wifi, netif, etc.)
+        // post events here. Backend-internal on purpose - there is no
+        // cross-platform event-loop abstraction to expose.
+        err = esp_event_loop_create_default();
+        if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
+            return false;
+
+        return true;
+    }
+
     bool task_create(TaskHandle &out_handle,
                      const char *name,
                      uint32_t stack_size_bytes,

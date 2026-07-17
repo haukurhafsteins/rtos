@@ -9,5 +9,5 @@ idf_component_register(
     INCLUDE_DIRS
         "include"
     REQUIRES
-        driver esp_timer esp_app_format nvs_flash
+        driver esp_timer esp_app_format nvs_flash esp_event
 )

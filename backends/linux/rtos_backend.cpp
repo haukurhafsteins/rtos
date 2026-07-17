@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "rtos/AppInfo.hpp"
+#include "rtos/backend.hpp"
 #include "rtos/Log.hpp"
 #include "rtos/LogSinks.hpp"
 #include "rtos/psram.hpp"
@@ -251,3 +252,7 @@ bool AppInfo::macAddress(uint8_t (&mac)[MacSize])
 }
 
 }
+// Platform bring-up: a Linux process needs no system services installed -
+// signals/threads are ready at process start. Present so portable app code
+// can unconditionally call rtos::backend::init().
+bool rtos::backend::init() noexcept { return true; }
