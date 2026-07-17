@@ -2,7 +2,6 @@
 
 #include <type_traits>
 #include <stdio.h>
-#include <esp_timer.h>
 #include "rtos/time.hpp"
 
 #define PRINT_FLOAT_EVERY_Millis(_dbg_period, _dbg_name, _dbg_value) \
