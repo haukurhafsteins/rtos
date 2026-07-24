@@ -1,4 +1,6 @@
 #include <cstdarg>
+#include <algorithm>
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -26,6 +28,14 @@ TagRule s_rules[RTOS_LOG_MAX_TAG_RULES] = {};
 std::size_t s_ruleCount = 0;
 rtos::Log::TimestampFn s_timestampProvider = nullptr;
 std::mutex s_logMutex;
+thread_local bool s_inSinkDispatch = false;
+
+class SinkDispatchGuard
+{
+public:
+	SinkDispatchGuard() { s_inSinkDispatch = true; }
+	~SinkDispatchGuard() { s_inSinkDispatch = false; }
+};
 }
 
 namespace rtos {
@@ -143,10 +153,21 @@ void Log::vlog(LogLevel level, const char *tag, const char *fmt, va_list ap)
 		? static_cast<std::size_t>(lineLength)
 		: sizeof(line) - 1;
 
-	std::lock_guard<std::mutex> lock(s_logMutex);
-	for (std::size_t i = 0; i < s_sinkCount; ++i)
+	if (s_inSinkDispatch)
+		return;
+
+	std::array<ILogSink *, RTOS_LOG_MAX_SINKS> sinks{};
+	std::size_t sinkCount = 0;
 	{
-		auto *sink = s_sinks[i];
+		std::lock_guard<std::mutex> lock(s_logMutex);
+		sinkCount = s_sinkCount;
+		std::copy_n(s_sinks, sinkCount, sinks.begin());
+	}
+
+	SinkDispatchGuard dispatchGuard;
+	for (std::size_t i = 0; i < sinkCount; ++i)
+	{
+		auto *sink = sinks[i];
 		if (sink && sink->enabled(level))
 			sink->write(level, resolvedTag, line, emittedLength);
 	}

@@ -35,6 +35,7 @@ include(GoogleTest)
 add_library(rtos_host_support STATIC
     ../src/rtos_common.cpp
     ../backends/linux/rtos_backend.cpp
+    ../backends/espidf/rtos_final_log_output.cpp
     ../backends/linux/rtos_spi.cpp
     ../backends/linux/rtos_i2c.cpp
     ../backends/linux/rtos_nvs.cpp
@@ -44,9 +45,13 @@ add_library(rtos_host_support STATIC
 target_include_directories(rtos_host_support
     PUBLIC
         ../include
+    PRIVATE
+        stubs
 )
 
 add_executable(rtos_host_tests
+    final_log_output_test.cpp
+    log_test.cpp
     ring_buffer_test.cpp
 )
 
@@ -55,6 +60,8 @@ target_link_libraries(rtos_host_tests
         rtos_host_support
         GTest::gtest_main
 )
+
+target_include_directories(rtos_host_tests PRIVATE stubs)
 
 if(MSVC)
     target_compile_options(rtos_host_support PRIVATE /W4)

@@ -1,6 +1,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
+#include <array>
 
 #include "rtos/backend.hpp"
 #include "rtos/time.hpp"
@@ -130,6 +132,15 @@ namespace rtos::backend
         return pdMS_TO_TICKS(timeout_ms.count());
     }
 
+    inline TickType_t to_ticks(uint32_t timeout_ms)
+    {
+        if (timeout_ms == static_cast<uint32_t>(WAIT_FOREVER.count()))
+        {
+            return portMAX_DELAY;
+        }
+        return pdMS_TO_TICKS(timeout_ms);
+    }
+
     //-----------------------------------------------------------------------------
     // Queues
     //-----------------------------------------------------------------------------
@@ -154,14 +165,14 @@ namespace rtos::backend
         }
     }
 
-    bool queue_send(QueueHandle handle, const void *item, Millis timeout_ms) noexcept
+    bool queue_send(QueueHandle handle, const void *item, uint32_t timeout_ms) noexcept
     {
         return xQueueSend(static_cast<QueueHandle_t>(handle),
                           item,
                           to_ticks(timeout_ms)) == pdTRUE;
     }
 
-    bool queue_receive(QueueHandle handle, void *out_item, Millis timeout_ms) noexcept
+    bool queue_receive(QueueHandle handle, void *out_item, uint32_t timeout_ms) noexcept
     {
         return xQueueReceive(static_cast<QueueHandle_t>(handle),
                              out_item,
@@ -368,6 +379,14 @@ namespace
     size_t s_ruleCount = 0;
 
     Log::TimestampFn s_ts = nullptr;
+    thread_local bool s_inSinkDispatch = false;
+
+    class SinkDispatchGuard
+    {
+    public:
+        SinkDispatchGuard() { s_inSinkDispatch = true; }
+        ~SinkDispatchGuard() { s_inSinkDispatch = false; }
+    };
 
 #if RTOS_LOG_SHOW_FILELINE
     // Extract basename from __FILE__ strings stored in flash/ROM
@@ -492,10 +511,13 @@ void Log::unlock()
 
 void Log::vlog(LogLevel level, const char *tag, const char *fmt, va_list ap)
 {
-    char line[RTOS_LOG_LINE_MAX];
+    if (!shouldEmit(level, tag))
+        return;
+
+    char body[RTOS_LOG_LINE_MAX];
     va_list ap_copy;
     va_copy(ap_copy, ap);
-    int n = std::vsnprintf(line, sizeof(line), fmt ? fmt : "", ap_copy);
+    int n = std::vsnprintf(body, sizeof(body), fmt ? fmt : "", ap_copy);
     va_end(ap_copy);
 
     if (n < 0)
@@ -503,65 +525,67 @@ void Log::vlog(LogLevel level, const char *tag, const char *fmt, va_list ap)
         return;
     }
 
-    line[sizeof(line) - 1] = '\0';
+    body[sizeof(body) - 1] = '\0';
 
     switch (level)
     {
     case rtos::LogLevel::Error:
-        ESP_LOGE(tag, "%s", line);
+        ESP_LOGE(tag, "%s", body);
         break;
     case rtos::LogLevel::Warn:
-        ESP_LOGW(tag, "%s", line);
+        ESP_LOGW(tag, "%s", body);
         break;
     case rtos::LogLevel::Info:
-        ESP_LOGI(tag, "%s", line);
+        ESP_LOGI(tag, "%s", body);
         break;
     case rtos::LogLevel::Debug:
-        ESP_LOGD(tag, "%s", line);
+        ESP_LOGD(tag, "%s", body);
         break;
     case rtos::LogLevel::Verbose:
-        ESP_LOGV(tag, "%s", line);
+        ESP_LOGV(tag, "%s", body);
         break;
     default:
         break;
     }
 
-    //     if (!shouldEmit(level, tag))
-    //         return;
+    if (s_inSinkDispatch)
+        return;
 
-    //     // Format the message body
-    //     char body[RTOS_LOG_LINE_MAX];
-    //     int n = std::vsnprintf(body, sizeof(body), msg ? msg : "", ap);
-    //     if (n < 0)
-    //         return; // formatting error
+    const char *resolvedTag = tag ? tag : "rtos";
+    char line[RTOS_LOG_LINE_MAX];
+#if RTOS_LOG_SHOW_TIME
+    const auto timestamp = s_ts ? s_ts() : rtos::time::now_ms().count();
+    const int lineLength = std::snprintf(
+        line, sizeof(line), "[%llu] %c/%s: %s",
+        static_cast<unsigned long long>(timestamp),
+        levelChar(level), resolvedTag, body);
+#else
+    const int lineLength = std::snprintf(
+        line, sizeof(line), "%c/%s: %s",
+        levelChar(level), resolvedTag, body);
+#endif
+    if (lineLength < 0)
+        return;
 
-    //     // Compose final line with prefix
-    //     char line[RTOS_LOG_LINE_MAX];
+    const size_t emittedLength =
+        lineLength < static_cast<int>(sizeof(line))
+            ? static_cast<size_t>(lineLength)
+            : sizeof(line) - 1;
 
-    // #if RTOS_LOG_SHOW_FILELINE
-    //     // Detect presence of FILE and LINE via GNU extensions: not available here; caller may bake in if desired
-    // #endif
+    std::array<ILogSink *, RTOS_LOG_MAX_SINKS> sinks{};
+    size_t sinkCount = 0;
+    lock();
+    sinkCount = s_sinkCount;
+    std::copy_n(s_sinks, sinkCount, sinks.begin());
+    unlock();
 
-    //     const char *t = tag ? tag : "rtos";
-
-    // #if RTOS_LOG_SHOW_TIME
-    //     int m = std::snprintf(line, sizeof(line), "[%llu] %c/%s: %s", rtos::time::now_ms().count(), levelChar(level), t, body);
-    // #else
-    //     int m = std::snprintf(line, sizeof(line), "%c/%s: %s", levelChar(level), t, body);
-    // #endif
-    //     if (m < 0)
-    //         return;
-    //     size_t lineLen = (m < (int)sizeof(line)) ? (size_t)m : sizeof(line) - 1;
-
-    //     // Write to sinks
-    //     lock();
-    //     for (size_t i = 0; i < s_sinkCount; ++i)
-    //     {
-    //         auto *s = s_sinks[i];
-    //         if (s && s->enabled(level))
-    //             s->write(level, t, line, lineLen);
-    //     }
-    //     unlock();
+    SinkDispatchGuard dispatchGuard;
+    for (size_t i = 0; i < sinkCount; ++i)
+    {
+        auto *sink = sinks[i];
+        if (sink && sink->enabled(level))
+            sink->write(level, resolvedTag, line, emittedLength);
+    }
 }
 
 void Log::log(LogLevel level, const char *tag, const char *fmt, ...)
