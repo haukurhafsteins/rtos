@@ -47,6 +47,7 @@ target_include_directories(rtos_host_support
 )
 
 add_executable(rtos_host_tests
+    log_test.cpp
     ring_buffer_test.cpp
 )
 
