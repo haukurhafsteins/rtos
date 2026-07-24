@@ -132,6 +132,15 @@ namespace rtos::backend
         return pdMS_TO_TICKS(timeout_ms.count());
     }
 
+    inline TickType_t to_ticks(uint32_t timeout_ms)
+    {
+        if (timeout_ms == static_cast<uint32_t>(WAIT_FOREVER.count()))
+        {
+            return portMAX_DELAY;
+        }
+        return pdMS_TO_TICKS(timeout_ms);
+    }
+
     //-----------------------------------------------------------------------------
     // Queues
     //-----------------------------------------------------------------------------
@@ -156,14 +165,14 @@ namespace rtos::backend
         }
     }
 
-    bool queue_send(QueueHandle handle, const void *item, Millis timeout_ms) noexcept
+    bool queue_send(QueueHandle handle, const void *item, uint32_t timeout_ms) noexcept
     {
         return xQueueSend(static_cast<QueueHandle_t>(handle),
                           item,
                           to_ticks(timeout_ms)) == pdTRUE;
     }
 
-    bool queue_receive(QueueHandle handle, void *out_item, Millis timeout_ms) noexcept
+    bool queue_receive(QueueHandle handle, void *out_item, uint32_t timeout_ms) noexcept
     {
         return xQueueReceive(static_cast<QueueHandle_t>(handle),
                              out_item,
