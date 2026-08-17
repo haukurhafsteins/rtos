@@ -1,4 +1,5 @@
 #include "rtos/backend.hpp"
+#include "rtos/Log.hpp"
 
 #include <cstdint>
 #include <limits>
@@ -83,6 +84,7 @@ void taskEntry(void *slotPointer, void *, void *)
 {
     auto &slot = *static_cast<TaskSlot *>(slotPointer);
     slot.function(slot.argument);
+    releaseTaskSlot(slot);
 }
 
 bool translatePriority(std::uint32_t freeRtosPriority, int &zephyrPriority)
@@ -124,9 +126,15 @@ bool task_create(
 {
     outHandle = nullptr;
     int zephyrPriority = 0;
-    if (!function || stackSizeBytes == 0 || stackSizeBytes > TASK_STACK_BYTES ||
-        !translatePriority(priority, zephyrPriority))
+    if (!function || stackSizeBytes == 0 || stackSizeBytes > TASK_STACK_BYTES)
+        return false;
+
+    if (!translatePriority(priority, zephyrPriority))
     {
+        RTOS_LOGE(
+            "rtos.task",
+            "task '%s' priority %u exceeds Zephyr preemptive ceiling %u",
+            name ? name : "<unnamed>", priority, PRIO_CEIL);
         return false;
     }
 
@@ -185,6 +193,13 @@ void task_delete(TaskHandle handle) noexcept
     auto *slot = findTaskSlot(thread);
     if (!slot)
         return;
+
+    if (thread == k_current_get())
+    {
+        releaseTaskSlot(*slot);
+        k_thread_abort(thread);
+        return;
+    }
 
     k_thread_abort(thread);
     releaseTaskSlot(*slot);

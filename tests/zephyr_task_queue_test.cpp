@@ -1,5 +1,8 @@
 #include <algorithm>
+#include <csetjmp>
+#include <cstdarg>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <deque>
@@ -9,6 +12,7 @@
 
 #include <gtest/gtest.h>
 
+#include "rtos/Log.hpp"
 #include "rtos/backend.hpp"
 #include "zephyr/kernel.h"
 
@@ -44,8 +48,14 @@ k_timeout_t s_lastSleep{};
 k_timeout_t s_lastQueueTimeout{};
 bool s_failThreadCreate = false;
 bool s_failQueueInit = false;
+bool s_abortSelfDoesNotReturn = false;
+std::jmp_buf s_selfAbortJump;
 int s_userTaskCalls = 0;
 void *s_userTaskArgument = nullptr;
+int s_logCalls = 0;
+rtos::LogLevel s_lastLogLevel = rtos::LogLevel::None;
+std::string s_lastLogTag;
+std::string s_lastLogMessage;
 
 FakeQueueState *queueState(k_msgq *queue)
 {
@@ -71,8 +81,13 @@ protected:
         s_lastQueueTimeout = {};
         s_failThreadCreate = false;
         s_failQueueInit = false;
+        s_abortSelfDoesNotReturn = false;
         s_userTaskCalls = 0;
         s_userTaskArgument = nullptr;
+        s_logCalls = 0;
+        s_lastLogLevel = rtos::LogLevel::None;
+        s_lastLogTag.clear();
+        s_lastLogMessage.clear();
     }
 
     void TearDown() override
@@ -123,6 +138,23 @@ protected:
 };
 }
 
+namespace rtos
+{
+void Log::log(LogLevel level, const char *tag, const char *format, ...)
+{
+    char message[256]{};
+    va_list arguments;
+    va_start(arguments, format);
+    std::vsnprintf(message, sizeof(message), format, arguments);
+    va_end(arguments);
+
+    ++s_logCalls;
+    s_lastLogLevel = level;
+    s_lastLogTag = tag ? tag : "";
+    s_lastLogMessage = message;
+}
+}
+
 extern "C" k_tid_t k_thread_create(
     k_thread *thread,
     k_thread_stack_t *stack,
@@ -159,6 +191,8 @@ extern "C" int k_thread_name_set(k_tid_t thread, const char *name)
 extern "C" void k_thread_abort(k_tid_t thread)
 {
     s_abortedThreads.push_back(thread);
+    if (s_abortSelfDoesNotReturn && thread == s_currentThread)
+        std::longjmp(s_selfAbortJump, 1);
 }
 
 extern "C" k_tid_t k_current_get()
@@ -300,6 +334,42 @@ TEST_F(ZephyrTaskQueueTest, ReusesOneOfSixteenStaticTaskSlotsAfterDelete)
     EXPECT_NE(createTask(), nullptr);
 }
 
+TEST_F(ZephyrTaskQueueTest, ReusesStaticTaskSlotWhenTaskFunctionReturns)
+{
+    for (int index = 0; index < 16; ++index)
+        ASSERT_NE(createTask(), nullptr);
+
+    const auto finished = taskHandles.front();
+    const auto &call = s_threadCreates.front();
+    call.entry(call.p1, call.p2, call.p3);
+    forgetTask(finished);
+
+    EXPECT_NE(createTask(), nullptr);
+}
+
+TEST_F(ZephyrTaskQueueTest, ReleasesStaticTaskSlotBeforeSelfAbortDoesNotReturn)
+{
+    for (int index = 0; index < 16; ++index)
+        ASSERT_NE(createTask(), nullptr);
+
+    const auto self = taskHandles.front();
+    s_currentThread = static_cast<k_tid_t>(self);
+    s_abortSelfDoesNotReturn = true;
+    if (setjmp(s_selfAbortJump) == 0)
+    {
+        rtos::backend::task_delete(self);
+        FAIL() << "self-abort unexpectedly returned";
+    }
+
+    s_abortSelfDoesNotReturn = false;
+    s_currentThread = nullptr;
+    forgetTask(self);
+    const auto replacement = createTask();
+    EXPECT_NE(replacement, nullptr);
+    if (!replacement)
+        rtos::backend::task_delete(self);
+}
+
 TEST_F(ZephyrTaskQueueTest, PinnedCreateDocumentsSingleCoreNeutrality)
 {
     rtos::backend::TaskHandle handle = nullptr;
@@ -337,6 +407,21 @@ TEST_F(ZephyrTaskQueueTest, ReportsThreadAndStackAdmissionFailures)
 
     s_failThreadCreate = false;
     EXPECT_NE(createTask(), nullptr);
+}
+
+TEST_F(ZephyrTaskQueueTest, LogsRejectedPriorityWithTaskNameAndCeiling)
+{
+    rtos::backend::TaskHandle handle = reinterpret_cast<void *>(0x1);
+    EXPECT_FALSE(rtos::backend::task_create(
+        handle, "vibrate", 4096, 25, userTask, nullptr));
+    EXPECT_EQ(handle, nullptr);
+
+    ASSERT_EQ(s_logCalls, 1);
+    EXPECT_EQ(s_lastLogLevel, rtos::LogLevel::Error);
+    EXPECT_EQ(s_lastLogTag, "rtos.task");
+    EXPECT_NE(s_lastLogMessage.find("vibrate"), std::string::npos);
+    EXPECT_NE(s_lastLogMessage.find("25"), std::string::npos);
+    EXPECT_NE(s_lastLogMessage.find("24"), std::string::npos);
 }
 
 TEST_F(ZephyrTaskQueueTest, QueueRoundTripsFixedSizeItemsAndReportsCapacity)
