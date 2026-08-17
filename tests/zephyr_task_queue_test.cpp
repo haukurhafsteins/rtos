@@ -40,8 +40,16 @@ struct FakeQueueState
     std::deque<std::vector<unsigned char>> items;
 };
 
+struct ThreadJoinCall
+{
+    k_tid_t thread = nullptr;
+    k_timeout_t timeout{};
+};
+
 std::vector<ThreadCreateCall> s_threadCreates;
+std::vector<ThreadJoinCall> s_threadJoins;
 std::vector<k_tid_t> s_abortedThreads;
+std::vector<k_tid_t> s_threadsInExitEpilogue;
 k_tid_t s_currentThread = nullptr;
 int s_yieldCount = 0;
 k_timeout_t s_lastSleep{};
@@ -74,7 +82,9 @@ protected:
     void SetUp() override
     {
         s_threadCreates.clear();
+        s_threadJoins.clear();
         s_abortedThreads.clear();
+        s_threadsInExitEpilogue.clear();
         s_currentThread = nullptr;
         s_yieldCount = 0;
         s_lastSleep = {};
@@ -167,8 +177,14 @@ extern "C" k_tid_t k_thread_create(
     std::uint32_t options,
     k_timeout_t delay)
 {
-    if (s_failThreadCreate)
+    if (s_failThreadCreate ||
+        std::find(
+            s_threadsInExitEpilogue.begin(),
+            s_threadsInExitEpilogue.end(),
+            thread) != s_threadsInExitEpilogue.end())
+    {
         return nullptr;
+    }
     thread->identifier = static_cast<int>(s_threadCreates.size()) + 1;
     s_threadCreates.push_back(
         {thread, stack, stackSize, entry, p1, p2, p3, priority, options, delay, {}});
@@ -185,6 +201,16 @@ extern "C" int k_thread_name_set(k_tid_t thread, const char *name)
             break;
         }
     }
+    return 0;
+}
+
+extern "C" int k_thread_join(k_tid_t thread, k_timeout_t timeout)
+{
+    s_threadJoins.push_back({thread, timeout});
+    const auto pending = std::find(
+        s_threadsInExitEpilogue.begin(), s_threadsInExitEpilogue.end(), thread);
+    if (pending != s_threadsInExitEpilogue.end())
+        s_threadsInExitEpilogue.erase(pending);
     return 0;
 }
 
@@ -345,6 +371,26 @@ TEST_F(ZephyrTaskQueueTest, ReusesStaticTaskSlotWhenTaskFunctionReturns)
     forgetTask(finished);
 
     EXPECT_NE(createTask(), nullptr);
+}
+
+TEST_F(ZephyrTaskQueueTest, WaitsForPreviousThreadExitBeforeReusingStaticSlot)
+{
+    const auto finished = createTask();
+    ASSERT_NE(finished, nullptr);
+    ASSERT_TRUE(s_threadJoins.empty());
+
+    const auto call = s_threadCreates.front();
+    call.entry(call.p1, call.p2, call.p3);
+    forgetTask(finished);
+    s_threadsInExitEpilogue.push_back(static_cast<k_tid_t>(finished));
+
+    const auto replacement = createTask();
+    ASSERT_NE(replacement, nullptr);
+    ASSERT_EQ(s_threadJoins.size(), 1u);
+    EXPECT_EQ(s_threadJoins.front().thread, finished);
+    EXPECT_EQ(
+        s_threadJoins.front().timeout.milliseconds,
+        K_FOREVER.milliseconds);
 }
 
 TEST_F(ZephyrTaskQueueTest, ReleasesStaticTaskSlotBeforeSelfAbortDoesNotReturn)

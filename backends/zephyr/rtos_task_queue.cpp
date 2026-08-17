@@ -32,6 +32,7 @@ struct TaskSlot
     TaskFunction function = nullptr;
     void *argument = nullptr;
     bool occupied = false;
+    bool usedBefore = false;
 };
 
 TaskSlot s_taskSlots[TASK_SLOT_COUNT];
@@ -142,8 +143,17 @@ bool task_create(
     if (!slot)
         return false;
 
+    if (slot->usedBefore && k_thread_join(&slot->thread, K_FOREVER) != 0)
+    {
+        releaseTaskSlot(*slot);
+        return false;
+    }
+
     slot->function = function;
     slot->argument = argument;
+    // Publish reuse state before starting the thread: a K_NO_WAIT task can
+    // return and release its slot before k_thread_create itself returns.
+    slot->usedBefore = true;
     const auto slotIndex = static_cast<std::size_t>(slot - s_taskSlots);
     auto *thread = k_thread_create(
         &slot->thread,
@@ -158,6 +168,7 @@ bool task_create(
         K_NO_WAIT);
     if (!thread)
     {
+        slot->usedBefore = false;
         releaseTaskSlot(*slot);
         return false;
     }
