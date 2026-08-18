@@ -6,6 +6,9 @@
 
 namespace rtos
 {
+    template <typename T>
+    class Queue;
+
     namespace gpio
     {
 
@@ -81,10 +84,6 @@ namespace rtos
             uint64_t timestamp_us; // best-effort time (monotonic)
         };
 
-        // Forward declaration to avoid dragging queue headers here
-        template <typename T>
-        class Queue;
-
         // Callback type (called in TASK CONTEXT — backends will de-bounce and defer)
         using Callback = std::function<void(const Event &)>;
 
@@ -102,7 +101,7 @@ namespace rtos
                 virtual void enable_interrupt(Trigger) = 0;
                 virtual void disable_interrupt() = 0;
                 virtual void set_callback(Callback) = 0;
-                virtual void attach_queue(Queue<Event> *) = 0;
+                virtual void attach_queue(rtos::Queue<Event> *) = 0;
                 virtual void set_debounce_us(uint32_t) = 0;
             };
 
@@ -135,7 +134,7 @@ namespace rtos
 
             // Deliver events using one of these:
             void set_callback(Callback cb);
-            void attach_queue(Queue<Event> *queue);
+            void attach_queue(rtos::Queue<Event> *queue);
 
             // Optional soft debounce (in microseconds). 0 disables.
             void set_debounce_us(uint32_t us);

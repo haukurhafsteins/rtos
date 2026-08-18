@@ -124,3 +124,30 @@ else()
 endif()
 
 gtest_discover_tests(rtos_zephyr_bus_tests)
+
+add_executable(rtos_zephyr_gpio_tests
+    zephyr_gpio_stubs.cpp
+    zephyr_gpio_test.cpp
+    ../src/rtos_common.cpp
+    ../backends/zephyr/rtos_backend.cpp
+)
+
+target_link_libraries(rtos_zephyr_gpio_tests
+    PRIVATE
+        GTest::gtest_main
+)
+
+target_include_directories(rtos_zephyr_gpio_tests
+    PRIVATE
+        ../include
+        stubs_gpio
+        stubs
+)
+
+if(MSVC)
+    target_compile_options(rtos_zephyr_gpio_tests PRIVATE /W4)
+else()
+    target_compile_options(rtos_zephyr_gpio_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+gtest_discover_tests(rtos_zephyr_gpio_tests)
