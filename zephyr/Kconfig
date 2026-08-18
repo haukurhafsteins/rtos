@@ -1,0 +1,87 @@
+menu "rtos portability layer"
+depends on CPP
+
+config RTOS_TIME
+	bool "Time and sleep backend"
+	depends on MULTITHREADING
+	help
+	  Build the Zephyr monotonic time, sleep, and high-resolution clock
+	  implementation.
+
+config RTOS_LOG
+	bool "Logging backend"
+	depends on MULTITHREADING && PRINTK
+	help
+	  Build the common log engine, Zephyr printk sink, and final-output tee.
+
+config RTOS_ASSERT
+	bool "Assertion backend"
+	depends on RTOS_LOG
+	help
+	  Build assertion failure handling through the rtos logger and k_panic().
+
+config RTOS_TASK_QUEUE
+	bool "Task and queue backend"
+	depends on MULTITHREADING && RTOS_LOG
+	help
+	  Build the static task registry and k_msgq-backed queue implementation.
+
+config RTOS_MESSAGE_BUFFER
+	bool "Message buffer backend"
+	depends on MULTITHREADING
+	help
+	  Build the framed variable-length message buffer implementation.
+
+config RTOS_NVS
+	bool "NVS backend"
+	depends on NVS && FLASH_MAP
+	help
+	  Build the string-keyed rtos NVS layer over a Zephyr flash partition.
+
+config RTOS_SPI
+	bool "SPI backend"
+	depends on SPI && GPIO
+	help
+	  Build the blocking devicetree-backed SPI implementation.
+
+config RTOS_I2C
+	bool "I2C backend"
+	depends on I2C
+	help
+	  Build the blocking devicetree-backed I2C implementation.
+
+config RTOS_GPIO
+	bool "GPIO backend"
+	depends on GPIO && RTOS_TASK_QUEUE
+	help
+	  Build GPIO pins, interrupts, and queue delivery.
+
+config RTOS_WATCHDOG
+	bool "Task watchdog backend"
+	depends on TASK_WDT
+	help
+	  Build the task_wdt-backed watchdog implementation.
+
+config RTOS_PSRAM
+	bool "External-memory compatibility heap"
+	depends on MULTITHREADING
+	help
+	  Build the psram_* compatibility API over a dedicated Zephyr k_heap.
+
+config RTOS_PSRAM_HEAP_SIZE
+	int "Compatibility heap size in bytes"
+	depends on RTOS_PSRAM
+	range 64 2147483647
+	default 65536
+	help
+	  Reserve this many bytes for the psram_* compatibility heap. Set the
+	  value from a measured application allocation budget.
+
+config RTOS_APP_INFO
+	bool "Application and chip information backend"
+	depends on HWINFO && FLASH_MAP && MCUBOOT_IMG_MANAGER
+	help
+	  Build application version, static chip capability, and hardware device
+	  identifier reporting.
+
+endmenu

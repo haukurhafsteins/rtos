@@ -32,6 +32,14 @@ endif()
 
 include(GoogleTest)
 
+add_test(
+    NAME zephyr_build_integration_contract
+    COMMAND
+        ${CMAKE_COMMAND}
+        -DRTOS_ROOT=${CMAKE_CURRENT_LIST_DIR}/..
+        -P ${CMAKE_CURRENT_LIST_DIR}/zephyr_build_integration_test.cmake
+)
+
 add_library(rtos_host_support STATIC
     ../src/rtos_common.cpp
     ../backends/linux/rtos_backend.cpp
