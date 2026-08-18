@@ -73,3 +73,28 @@ else()
 endif()
 
 gtest_discover_tests(rtos_host_tests)
+
+add_executable(rtos_zephyr_nvs_tests
+    zephyr_nvs_stubs.cpp
+    zephyr_nvs_test.cpp
+    ../backends/zephyr/rtos_nvs.cpp
+)
+
+target_link_libraries(rtos_zephyr_nvs_tests
+    PRIVATE
+        GTest::gtest_main
+)
+
+target_include_directories(rtos_zephyr_nvs_tests
+    PRIVATE
+        ../include
+        stubs
+)
+
+if(MSVC)
+    target_compile_options(rtos_zephyr_nvs_tests PRIVATE /W4)
+else()
+    target_compile_options(rtos_zephyr_nvs_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+gtest_discover_tests(rtos_zephyr_nvs_tests)

@@ -337,6 +337,11 @@ bool writeValue(
 
     const ValueType previousType = mapping->type;
     const uint32_t previousSize = mapping->valueSize;
+    const bool metadataChanged = added || previousType != type ||
+        previousSize != size;
+    if (!metadataChanged)
+        return true;
+
     mapping->type = type;
     mapping->valueSize = static_cast<uint32_t>(size);
     if (persistCollisionTable())
@@ -529,7 +534,32 @@ bool Nvs::erase_key(const char* key)
         return false;
 
     auto* mapping = findMapping(*toHandle(handle_), key);
-    return mapping != nullptr && nvs_delete(&filesystem, mapping->id) == 0;
+    if (mapping == nullptr || nvs_delete(&filesystem, mapping->id) != 0)
+        return false;
+
+    const size_t removedIndex = static_cast<size_t>(
+        mapping - collisionTable.mappings);
+    const size_t lastIndex = collisionTable.count - 1;
+    const Mapping removed = *mapping;
+    if (removedIndex != lastIndex)
+    {
+        collisionTable.mappings[removedIndex] =
+            collisionTable.mappings[lastIndex];
+    }
+    collisionTable.mappings[lastIndex] = Mapping{};
+    --collisionTable.count;
+
+    if (persistCollisionTable())
+        return true;
+
+    ++collisionTable.count;
+    if (removedIndex != lastIndex)
+    {
+        collisionTable.mappings[lastIndex] =
+            collisionTable.mappings[removedIndex];
+    }
+    collisionTable.mappings[removedIndex] = removed;
+    return false;
 }
 
 bool Nvs::commit()
