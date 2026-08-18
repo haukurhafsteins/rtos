@@ -105,3 +105,14 @@ string(FIND "${kconfig}" "config RTOS_PSRAM_HEAP_SIZE" heap_size_position)
 if(heap_size_position EQUAL -1)
     message(FATAL_ERROR "zephyr/Kconfig is missing config RTOS_PSRAM_HEAP_SIZE")
 endif()
+
+foreach(dependency IN ITEMS
+    "depends on MULTITHREADING && RTOS_LOG && HEAP_MEM_POOL_SIZE > 0"
+    "depends on MULTITHREADING && HEAP_MEM_POOL_SIZE > 0"
+    "depends on TASK_WDT && WATCHDOG"
+)
+    string(FIND "${kconfig}" "${dependency}" dependency_position)
+    if(dependency_position EQUAL -1)
+        message(FATAL_ERROR "zephyr/Kconfig is missing dependency: ${dependency}")
+    endif()
+endforeach()
