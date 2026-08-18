@@ -98,3 +98,29 @@ else()
 endif()
 
 gtest_discover_tests(rtos_zephyr_nvs_tests)
+
+add_executable(rtos_zephyr_bus_tests
+    zephyr_bus_stubs.cpp
+    zephyr_bus_test.cpp
+    ../backends/zephyr/rtos_spi.cpp
+    ../backends/zephyr/rtos_i2c.cpp
+)
+
+target_link_libraries(rtos_zephyr_bus_tests
+    PRIVATE
+        GTest::gtest_main
+)
+
+target_include_directories(rtos_zephyr_bus_tests
+    PRIVATE
+        ../include
+        stubs
+)
+
+if(MSVC)
+    target_compile_options(rtos_zephyr_bus_tests PRIVATE /W4)
+else()
+    target_compile_options(rtos_zephyr_bus_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+gtest_discover_tests(rtos_zephyr_bus_tests)

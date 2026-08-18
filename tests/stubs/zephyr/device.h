@@ -2,9 +2,13 @@
 
 struct device
 {
+    int id = 0;
+    bool ready = true;
 };
 
-inline bool device_is_ready(const device*)
+const device* zephyr_test_device(int id);
+
+inline bool device_is_ready(const device* value)
 {
-    return true;
+    return value != nullptr && value->ready;
 }
