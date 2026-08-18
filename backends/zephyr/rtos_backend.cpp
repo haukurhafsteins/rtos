@@ -41,8 +41,6 @@ const MapEntry* findPin(int logicalId)
         GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), bat_alrt_gpios);
     static const gpio_dt_spec motor_control =
         GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), haptic_en_gpios);
-    static const gpio_dt_spec led_control = {
-        DEVICE_DT_GET(DT_NODELABEL(gpio0)), 25, GPIO_ACTIVE_HIGH};
     static const MapEntry table[] = {
         {logicalPinId(0, 7), &touch1},          // TBTN1
         {logicalPinId(0, 4), &touch2},          // TBTN2
@@ -51,7 +49,6 @@ const MapEntry* findPin(int logicalId)
         {logicalPinId(0, 28), &pmic_int},       // PMIC-INT
         {logicalPinId(0, 24), &battery_alert},  // BAT_ALRT
         {logicalPinId(1, 15), &motor_control},  // MCTRL
-        {logicalPinId(0, 25), &led_control},    // LEDCTL
     };
     for (const auto& entry : table)
     {

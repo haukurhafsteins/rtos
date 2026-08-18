@@ -28,7 +28,7 @@ TEST_F(ZephyrGpioTest, MapsUruWearLogicalPinsFromBoardDevicetree)
         int port;
         uint32_t pin;
     };
-    constexpr std::array<ExpectedPin, 8> expected{{
+    constexpr std::array<ExpectedPin, 7> expected{{
         {7, 0, 7},
         {4, 0, 4},
         {26, 0, 26},
@@ -36,7 +36,6 @@ TEST_F(ZephyrGpioTest, MapsUruWearLogicalPinsFromBoardDevicetree)
         {28, 0, 28},
         {24, 0, 24},
         {47, 1, 15},
-        {25, 0, 25},
     }};
 
     rtos::gpio::Config config;
@@ -49,6 +48,7 @@ TEST_F(ZephyrGpioTest, MapsUruWearLogicalPinsFromBoardDevicetree)
         EXPECT_EQ(zephyr_gpio_test::lastConfigured().pin, value.pin);
     }
 
+    EXPECT_EQ(rtos::gpio::Pin::make(25, config).id(), -1);
     EXPECT_EQ(rtos::gpio::Pin::make(0, config).id(), -1);
 }
 
