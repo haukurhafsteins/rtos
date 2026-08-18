@@ -151,3 +151,29 @@ else()
 endif()
 
 gtest_discover_tests(rtos_zephyr_gpio_tests)
+
+add_executable(rtos_zephyr_memory_appinfo_tests
+    zephyr_memory_appinfo_stubs.cpp
+    zephyr_memory_appinfo_test.cpp
+    ../backends/zephyr/rtos_psram.cpp
+    ../backends/zephyr/rtos_app_info.cpp
+)
+
+target_link_libraries(rtos_zephyr_memory_appinfo_tests
+    PRIVATE
+        GTest::gtest_main
+)
+
+target_include_directories(rtos_zephyr_memory_appinfo_tests
+    PRIVATE
+        ../include
+        stubs_memory_appinfo
+)
+
+if(MSVC)
+    target_compile_options(rtos_zephyr_memory_appinfo_tests PRIVATE /W4)
+else()
+    target_compile_options(rtos_zephyr_memory_appinfo_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+gtest_discover_tests(rtos_zephyr_memory_appinfo_tests)
