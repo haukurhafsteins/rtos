@@ -34,6 +34,7 @@ include(GoogleTest)
 
 add_library(rtos_host_support STATIC
     ../src/rtos_common.cpp
+    ../src/rtos_log.cpp
     ../backends/linux/rtos_backend.cpp
     ../backends/espidf/rtos_final_log_output.cpp
     ../backends/linux/rtos_spi.cpp
@@ -72,6 +73,30 @@ else()
 endif()
 
 gtest_discover_tests(rtos_host_tests)
+
+add_executable(rtos_zephyr_task_queue_tests
+    zephyr_task_queue_test.cpp
+    ../backends/zephyr/rtos_task_queue.cpp
+)
+
+target_link_libraries(rtos_zephyr_task_queue_tests
+    PRIVATE
+        GTest::gtest_main
+)
+
+target_include_directories(rtos_zephyr_task_queue_tests
+    PRIVATE
+        ../include
+        stubs
+)
+
+if(MSVC)
+    target_compile_options(rtos_zephyr_task_queue_tests PRIVATE /W4)
+else()
+    target_compile_options(rtos_zephyr_task_queue_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+gtest_discover_tests(rtos_zephyr_task_queue_tests)
 
 add_executable(rtos_zephyr_message_buffer_tests
     zephyr_message_buffer_test.cpp
