@@ -52,6 +52,11 @@ zephyr_library_sources_ifdef(CONFIG_RTOS_MESSAGE_BUFFER
 zephyr_library_sources_ifdef(CONFIG_RTOS_NVS
     ../backends/zephyr/rtos_nvs.cpp
 )
+if(CONFIG_RTOS_NVS AND CONFIG_PARTITION_MANAGER_ENABLED)
+    # Partition Manager names the NVS partition `storage`; Zephyr's default
+    # is `storage_partition`. TODO upstream: make this a Kconfig string.
+    zephyr_library_compile_definitions(RTOS_NVS_PARTITION=storage)
+endif()
 
 zephyr_library_sources_ifdef(CONFIG_RTOS_SPI
     ../backends/zephyr/rtos_spi.cpp
