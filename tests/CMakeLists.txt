@@ -96,3 +96,24 @@ else()
 endif()
 
 gtest_discover_tests(rtos_zephyr_message_buffer_tests)
+
+add_executable(rtos_zephyr_msgbuffer_header_compile
+    zephyr_msgbuffer_header_compile.cpp
+)
+
+target_compile_definitions(rtos_zephyr_msgbuffer_header_compile
+    PRIVATE
+        __ZEPHYR__=1
+)
+
+target_include_directories(rtos_zephyr_msgbuffer_header_compile
+    BEFORE PRIVATE
+        no_std_mutex
+        ../include
+        stubs
+)
+
+add_test(
+    NAME zephyr_msgbuffer_header_compile
+    COMMAND rtos_zephyr_msgbuffer_header_compile
+)
