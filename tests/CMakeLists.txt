@@ -74,30 +74,26 @@ endif()
 
 gtest_discover_tests(rtos_host_tests)
 
-add_executable(rtos_zephyr_foundation_tests
-    zephyr_foundation_test.cpp
-    ../src/rtos_log.cpp
-    ../backends/zephyr/rtos_time.cpp
-    ../backends/zephyr/rtos_assert.cpp
-    ../backends/zephyr/rtos_log.cpp
-    ../backends/zephyr/rtos_final_log_output.cpp
+add_executable(rtos_zephyr_task_queue_tests
+    zephyr_task_queue_test.cpp
+    ../backends/zephyr/rtos_task_queue.cpp
 )
 
-target_link_libraries(rtos_zephyr_foundation_tests
+target_link_libraries(rtos_zephyr_task_queue_tests
     PRIVATE
         GTest::gtest_main
 )
 
-target_include_directories(rtos_zephyr_foundation_tests
+target_include_directories(rtos_zephyr_task_queue_tests
     PRIVATE
         ../include
         stubs
 )
 
 if(MSVC)
-    target_compile_options(rtos_zephyr_foundation_tests PRIVATE /W4)
+    target_compile_options(rtos_zephyr_task_queue_tests PRIVATE /W4)
 else()
-    target_compile_options(rtos_zephyr_foundation_tests PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(rtos_zephyr_task_queue_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-gtest_discover_tests(rtos_zephyr_foundation_tests)
+gtest_discover_tests(rtos_zephyr_task_queue_tests)
