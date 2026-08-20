@@ -150,7 +150,8 @@ void resetCollisionTable()
     // materializes a ~2.8 KiB temporary on the caller's stack, which
     // overflowed a 1 KiB main stack and MPU-faulted the nRF5340 on first
     // init (URU bench, 2026-08-20). Reset in place instead.
-    std::memset(&collisionTable, 0, sizeof(collisionTable));
+    std::memset(static_cast<void*>(&collisionTable), 0,
+                sizeof(collisionTable));
     collisionTable.magic = CollisionTableMagic;
     collisionTable.version = CollisionTableVersion;
 }
