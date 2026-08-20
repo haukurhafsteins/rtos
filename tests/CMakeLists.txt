@@ -97,3 +97,48 @@ else()
 endif()
 
 gtest_discover_tests(rtos_zephyr_task_queue_tests)
+
+add_executable(rtos_zephyr_message_buffer_tests
+    zephyr_message_buffer_test.cpp
+    ../backends/zephyr/rtos_message_buffer.cpp
+)
+
+target_link_libraries(rtos_zephyr_message_buffer_tests
+    PRIVATE
+        GTest::gtest_main
+)
+
+target_include_directories(rtos_zephyr_message_buffer_tests
+    PRIVATE
+        ../include
+        stubs
+)
+
+if(MSVC)
+    target_compile_options(rtos_zephyr_message_buffer_tests PRIVATE /W4)
+else()
+    target_compile_options(rtos_zephyr_message_buffer_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+gtest_discover_tests(rtos_zephyr_message_buffer_tests)
+
+add_executable(rtos_zephyr_msgbuffer_header_compile
+    zephyr_msgbuffer_header_compile.cpp
+)
+
+target_compile_definitions(rtos_zephyr_msgbuffer_header_compile
+    PRIVATE
+        __ZEPHYR__=1
+)
+
+target_include_directories(rtos_zephyr_msgbuffer_header_compile
+    BEFORE PRIVATE
+        no_std_mutex
+        ../include
+        stubs
+)
+
+add_test(
+    NAME zephyr_msgbuffer_header_compile
+    COMMAND rtos_zephyr_msgbuffer_header_compile
+)

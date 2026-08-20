@@ -2,8 +2,8 @@
 #include <cstddef>
 #include <type_traits>
 #include <utility>
-#include <mutex>
 #include "rtos/backend.hpp"
+#include "rtos/Mutex.hpp"
 #include "rtos/time.hpp"
 
 namespace rtos
@@ -40,7 +40,7 @@ public:
     std::size_t send(const void* data, std::size_t bytes,
                      Millis timeout_ms = Millis::max()) noexcept
     {
-        std::lock_guard<std::mutex> lk(_send_mtx);
+        LockGuard lk(_send_mtx);
         return backend::msgbuf_send(_handle, data, bytes, timeout_ms);
     }
 
@@ -103,7 +103,7 @@ private:
 
     backend::MsgBufferHandle _handle;
     std::size_t _capacity;
-    std::mutex _send_mtx;
+    Mutex _send_mtx;
 };
 
 } // namespace rtos

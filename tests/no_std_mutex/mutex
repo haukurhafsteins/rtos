@@ -1,0 +1,1 @@
+#error "std::mutex is unavailable in Zephyr's C++ runtime"
