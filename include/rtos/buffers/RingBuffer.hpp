@@ -17,9 +17,9 @@ struct NoLock {
 };
 
 template<typename L>
-struct LockGuard {
-    LockGuard()  noexcept { L::lock(); }
-    ~LockGuard() noexcept { L::unlock(); }
+struct PolicyLock {
+    PolicyLock()  noexcept { L::lock(); }
+    ~PolicyLock() noexcept { L::unlock(); }
 };
 
 // RingBuffer with lock policy -------------------------------------------------
@@ -45,14 +45,14 @@ public:
 
     // Reset indices (contents left as-is)
     void reset() noexcept {
-        LockGuard<LockPolicy> g;
+        PolicyLock<LockPolicy> g;
         _head = 0;
         _count = 0;
     }
 
     // FIFO push (no overwrite). Returns false if full.
     bool push(const T& value) noexcept {
-        LockGuard<LockPolicy> g;
+        PolicyLock<LockPolicy> g;
         assert(_capacity && _data);
         if (isFullUnlocked()) return false;
         _data[_head] = value;
@@ -61,7 +61,7 @@ public:
         return true;
     }
     bool push(T&& value) noexcept {
-        LockGuard<LockPolicy> g;
+        PolicyLock<LockPolicy> g;
         assert(_capacity && _data);
         if (isFullUnlocked()) return false;
         _data[_head] = std::move(value);
@@ -72,7 +72,7 @@ public:
 
     // Overwrite oldest when full (always succeeds)
     void push_overwrite(const T& value) noexcept {
-        LockGuard<LockPolicy> g;
+        PolicyLock<LockPolicy> g;
         assert(_capacity && _data);
         _data[_head] = value;
         _head = next(_head);
@@ -80,7 +80,7 @@ public:
         // else keep _count == _capacity (oldest implicitly dropped)
     }
     void push_overwrite(T&& value) noexcept {
-        LockGuard<LockPolicy> g;
+        PolicyLock<LockPolicy> g;
         assert(_capacity && _data);
         _data[_head] = std::move(value);
         _head = next(_head);
@@ -88,7 +88,7 @@ public:
     }
 
     void write(const T* values, std::size_t n) noexcept {
-        LockGuard<LockPolicy> g;
+        PolicyLock<LockPolicy> g;
         assert(_capacity && _data);
         for (std::size_t i = 0; i < n; ++i) {
             _data[_head] = values[i];
@@ -105,7 +105,7 @@ public:
 
     // FIFO pop. Returns false if empty.
     bool pop(T& out) noexcept {
-        LockGuard<LockPolicy> g;
+        PolicyLock<LockPolicy> g;
         assert(_capacity && _data);
         if (_count == 0) return false;
         const std::size_t tail = oldestIndexUnlocked();
@@ -116,7 +116,7 @@ public:
 
     // Pop up to max items into out[]. Returns number popped.
     std::size_t pop_n(T* out, std::size_t max) noexcept {
-        LockGuard<LockPolicy> g;
+        PolicyLock<LockPolicy> g;
         assert(_capacity && _data);
         if (_count == 0 || max == 0) return 0;
         std::size_t n = (_count < max) ? _count : max;
@@ -137,7 +137,7 @@ public:
 
     // Copy up to max items into out[] without popping. Returns number copied.
     std::size_t copy_out(T* out, std::size_t max) const noexcept {
-        LockGuard<LockPolicy> g;
+        PolicyLock<LockPolicy> g;
         assert(_capacity && _data);
         if (_count == 0 || max == 0) return 0;
         std::size_t n = (_count < max) ? _count : max;
@@ -158,7 +158,7 @@ public:
     // Peek a contiguous span without popping; returns {ptr,len}
     // Span may be shorter than size() if wrapped.
     std::pair<const T*, std::size_t> peek_span() const noexcept {
-        LockGuard<LockPolicy> g;
+        PolicyLock<LockPolicy> g;
         if (_count == 0) return {nullptr, 0};
         const std::size_t tail = oldestIndexUnlocked();
         if (_head > tail) return {&_data[tail], _head - tail};
@@ -173,7 +173,7 @@ public:
 
     // Oldest-first, bounds-checked random access (0..size()-1)
     T& operator[](std::size_t i) {
-        LockGuard<LockPolicy> g;
+        PolicyLock<LockPolicy> g;
         assert(_capacity && _data);
         if (i >= _count){
             //TODO: Off by one. printf("RingBuffer index out of range: %zu (size=%zu)\n", i, _count);
@@ -181,7 +181,7 @@ public:
         return _data[(oldestIndexUnlocked() + i) % _capacity];
     }
     const T& operator[](std::size_t i) const {
-        LockGuard<LockPolicy> g;
+        PolicyLock<LockPolicy> g;
         assert(_capacity && _data);
         if (i >= _count) 
         {
@@ -192,14 +192,14 @@ public:
 
     // Recent access (0 = most recent). Bounds-checked.
     const T& getRecent(std::size_t idx) const {
-        LockGuard<LockPolicy> g;
+        PolicyLock<LockPolicy> g;
         assert(_capacity && _data);
         //if (_count == 0 || idx >= _count) throw std::out_of_range("RingBuffer recent");
         const std::size_t pos = (_head + _capacity - 1 - idx) % _capacity;
         return _data[pos];
     }
     void setRecent(std::size_t idx, const T& value) {
-        LockGuard<LockPolicy> g;
+        PolicyLock<LockPolicy> g;
         assert(_capacity && _data);
         //if (_count == 0 || idx >= _count) throw std::out_of_range("RingBuffer recent");
         const std::size_t pos = (_head + _capacity - 1 - idx) % _capacity;
@@ -207,12 +207,12 @@ public:
     }
 
     // Absolute access (wraps by capacity)
-    T&       getAt(std::size_t idx)       noexcept { LockGuard<LockPolicy> g; assert(_capacity && _data); return _data[idx % _capacity]; }
-    const T& getAt(std::size_t idx) const noexcept { LockGuard<LockPolicy> g; assert(_capacity && _data); return _data[idx % _capacity]; }
+    T&       getAt(std::size_t idx)       noexcept { PolicyLock<LockPolicy> g; assert(_capacity && _data); return _data[idx % _capacity]; }
+    const T& getAt(std::size_t idx) const noexcept { PolicyLock<LockPolicy> g; assert(_capacity && _data); return _data[idx % _capacity]; }
     void     setAt(std::size_t idx, const T& v) noexcept {
-        LockGuard<LockPolicy> g; assert(_capacity && _data); _data[idx % _capacity] = v;
+        PolicyLock<LockPolicy> g; assert(_capacity && _data); _data[idx % _capacity] = v;
     }
-    T*       getPointerAt(std::size_t idx) noexcept { LockGuard<LockPolicy> g; assert(_capacity && _data); return &_data[idx % _capacity]; }
+    T*       getPointerAt(std::size_t idx) noexcept { PolicyLock<LockPolicy> g; assert(_capacity && _data); return &_data[idx % _capacity]; }
 
     // Oldest index (where pop will read next)
     std::size_t oldestIndex() const noexcept {
@@ -220,8 +220,8 @@ public:
     }
 
     // Last appended element (unchecked; asserts when empty)
-    T&       getLast()       { LockGuard<LockPolicy> g; assert(_count && _capacity && _data); return _data[(_head + _capacity - 1) % _capacity]; }
-    const T& getLast() const { LockGuard<LockPolicy> g; assert(_count && _capacity && _data); return _data[(_head + _capacity - 1) % _capacity]; }
+    T&       getLast()       { PolicyLock<LockPolicy> g; assert(_count && _capacity && _data); return _data[(_head + _capacity - 1) % _capacity]; }
+    const T& getLast() const { PolicyLock<LockPolicy> g; assert(_count && _capacity && _data); return _data[(_head + _capacity - 1) % _capacity]; }
 
     // Introspection
     std::size_t headIndex()   const noexcept { return _head; }
@@ -231,7 +231,7 @@ public:
     std::size_t elements() const noexcept { return _count; }
 
     int toJson(std::span<char> buf, std::size_t count, const std::string& format = "%.6g") const {
-        LockGuard<LockPolicy> g;
+        PolicyLock<LockPolicy> g;
         if (count > _count)
             return -1;
 
