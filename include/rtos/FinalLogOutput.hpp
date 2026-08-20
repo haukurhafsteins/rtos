@@ -24,12 +24,14 @@ namespace rtos
      * Installs or replaces the final-output sink.
      *
      * On ESP-IDF, the first call installs a vprintf tee and preserves the
-     * previously configured output handler. Registration is startup-only.
+     * previously configured output handler. On Zephyr, it installs a printk
+     * character tee and preserves the console hook; each callback receives one
+     * character and is never truncated. Registration is startup-only.
      */
     void setFinalLogSink(IFinalLogSink *sink) noexcept;
 
     /**
-     * Stops final-output delivery without changing the platform UART handler.
+     * Stops final-output delivery without changing the platform output hook.
      */
     void clearFinalLogSink() noexcept;
 }

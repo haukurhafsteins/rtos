@@ -1,6 +1,3 @@
-#include <cstdarg>
-#include <algorithm>
-#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -15,171 +12,14 @@
 
 namespace
 {
-struct TagRule
-{
-	const char *tag;
-	rtos::LogLevel level;
-};
-
-rtos::ILogSink *s_sinks[RTOS_LOG_MAX_SINKS] = {};
-std::size_t s_sinkCount = 0;
-rtos::LogLevel s_globalLevel = rtos::LogLevel::Info;
-TagRule s_rules[RTOS_LOG_MAX_TAG_RULES] = {};
-std::size_t s_ruleCount = 0;
-rtos::Log::TimestampFn s_timestampProvider = nullptr;
 std::mutex s_logMutex;
-thread_local bool s_inSinkDispatch = false;
-
-class SinkDispatchGuard
-{
-public:
-	SinkDispatchGuard() { s_inSinkDispatch = true; }
-	~SinkDispatchGuard() { s_inSinkDispatch = false; }
-};
 }
 
 namespace rtos {
 
-void Log::addSink(ILogSink &sink)
-{
-	std::lock_guard<std::mutex> lock(s_logMutex);
-	if (s_sinkCount < RTOS_LOG_MAX_SINKS)
-		s_sinks[s_sinkCount++] = &sink;
-}
-
-void Log::clearSinks()
-{
-	std::lock_guard<std::mutex> lock(s_logMutex);
-	s_sinkCount = 0;
-	std::memset(s_sinks, 0, sizeof(s_sinks));
-}
-
-void Log::setGlobalLevel(LogLevel lvl) { s_globalLevel = lvl; }
-
-LogLevel Log::getGlobalLevel() { return s_globalLevel; }
-
-void Log::setTagLevel(const char *tag, LogLevel lvl)
-{
-	if (!tag)
-		return;
-
-	std::lock_guard<std::mutex> lock(s_logMutex);
-	for (std::size_t i = 0; i < s_ruleCount; ++i)
-	{
-		if (s_rules[i].tag == tag || (s_rules[i].tag && std::strcmp(s_rules[i].tag, tag) == 0))
-		{
-			s_rules[i].level = lvl;
-			return;
-		}
-	}
-
-	if (s_ruleCount < RTOS_LOG_MAX_TAG_RULES)
-		s_rules[s_ruleCount++] = TagRule{tag, lvl};
-}
-
-LogLevel Log::getTagLevel(const char *tag)
-{
-	if (!tag)
-		return LogLevel::None;
-
-	std::lock_guard<std::mutex> lock(s_logMutex);
-	for (std::size_t i = 0; i < s_ruleCount; ++i)
-	{
-		if (s_rules[i].tag == tag || (s_rules[i].tag && std::strcmp(s_rules[i].tag, tag) == 0))
-			return s_rules[i].level;
-	}
-
-	return LogLevel::None;
-}
-
-void Log::setTimestampProvider(TimestampFn fn) { s_timestampProvider = fn; }
-
-char Log::levelChar(LogLevel lvl)
-{
-	switch (lvl)
-	{
-	case LogLevel::Error:
-		return 'E';
-	case LogLevel::Warn:
-		return 'W';
-	case LogLevel::Info:
-		return 'I';
-	case LogLevel::Debug:
-		return 'D';
-	case LogLevel::Verbose:
-		return 'V';
-	default:
-		return '-';
-	}
-}
-
-bool Log::shouldEmit(LogLevel level, const char *tag)
-{
-	LogLevel tagLevel = getTagLevel(tag);
-	LogLevel gate = (tagLevel != LogLevel::None) ? tagLevel : s_globalLevel;
-	return static_cast<int>(level) <= static_cast<int>(gate);
-}
-
 void Log::lock() { s_logMutex.lock(); }
 
 void Log::unlock() { s_logMutex.unlock(); }
-
-void Log::vlog(LogLevel level, const char *tag, const char *fmt, va_list ap)
-{
-	if (!shouldEmit(level, tag))
-		return;
-
-	char body[RTOS_LOG_LINE_MAX];
-	va_list apCopy;
-	va_copy(apCopy, ap);
-	int n = std::vsnprintf(body, sizeof(body), fmt ? fmt : "", apCopy);
-	va_end(apCopy);
-	if (n < 0)
-		return;
-
-	const char *resolvedTag = tag ? tag : "rtos";
-	char line[RTOS_LOG_LINE_MAX];
-	int lineLength = 0;
-#if RTOS_LOG_SHOW_TIME
-	unsigned long timestamp = s_timestampProvider ? s_timestampProvider() : 0UL;
-	lineLength = std::snprintf(line, sizeof(line), "[%lu] %c/%s: %s", timestamp, levelChar(level), resolvedTag, body);
-#else
-	lineLength = std::snprintf(line, sizeof(line), "%c/%s: %s", levelChar(level), resolvedTag, body);
-#endif
-	if (lineLength < 0)
-		return;
-
-	std::size_t emittedLength = (lineLength < static_cast<int>(sizeof(line)))
-		? static_cast<std::size_t>(lineLength)
-		: sizeof(line) - 1;
-
-	if (s_inSinkDispatch)
-		return;
-
-	std::array<ILogSink *, RTOS_LOG_MAX_SINKS> sinks{};
-	std::size_t sinkCount = 0;
-	{
-		std::lock_guard<std::mutex> lock(s_logMutex);
-		sinkCount = s_sinkCount;
-		std::copy_n(s_sinks, sinkCount, sinks.begin());
-	}
-
-	SinkDispatchGuard dispatchGuard;
-	for (std::size_t i = 0; i < sinkCount; ++i)
-	{
-		auto *sink = sinks[i];
-		if (sink && sink->enabled(level))
-			sink->write(level, resolvedTag, line, emittedLength);
-	}
-}
-
-void Log::log(LogLevel level, const char *tag, const char *fmt, ...)
-{
-	va_list ap;
-	va_start(ap, fmt);
-	vlog(level, tag, fmt, ap);
-	va_end(ap);
-}
 
 void StdoutLogSink::write(LogLevel, const char *, const char *line, size_t)
 {

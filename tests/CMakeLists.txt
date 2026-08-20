@@ -42,6 +42,7 @@ add_test(
 
 add_library(rtos_host_support STATIC
     ../src/rtos_common.cpp
+    ../src/rtos_log.cpp
     ../backends/linux/rtos_backend.cpp
     ../backends/espidf/rtos_final_log_output.cpp
     ../backends/linux/rtos_spi.cpp
