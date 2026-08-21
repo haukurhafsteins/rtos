@@ -48,8 +48,12 @@ namespace rtos
         // Chip details. Read once and cached.
         static const Chip &chip();
 
-        // Factory-default MAC address. Returns false if the backend cannot
-        // provide one (mac is zero-filled in that case).
+        // Platform hardware identity. The historical name reflects the ESP
+        // backend, which returns the factory eFuse MAC. The Zephyr backend
+        // returns the first six bytes of hwinfo's device ID instead; those
+        // bytes are not the Bluetooth identity address. Callers deriving a
+        // Device Information Service serial must preserve that distinction.
+        // Returns false, with mac zero-filled, when identity is unavailable.
         static bool macAddress(uint8_t (&mac)[MacSize]);
     };
 } // namespace rtos

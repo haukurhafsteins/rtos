@@ -7,9 +7,8 @@
 // Portable non-volatile key/value storage abstraction.
 //
 // Modelled as a string-keyed key/value store grouped into namespaces — the
-// ESP-IDF NVS model. On Zephyr the same shape maps onto the settings
-// subsystem ("namespace/key" paths backed by NVS/ZMS); Zephyr's raw fs/nvs
-// API is numeric-ID based and is not used.
+// ESP-IDF NVS model. On Zephyr the same shape maps onto the raw NVS file
+// system using stable numeric IDs derived from namespace/key paths.
 //
 // This header declares the complete interface. Each backend implements the
 // methods in backends/<backend>/rtos_nvs.cpp; the build system selects which
@@ -17,8 +16,8 @@
 //
 // Backend support:
 //   - espidf: full implementation (nvs_flash component)
-//   - zephyr: compile-only stub, all operations return false
-//   - linux:  compile-only stub, all operations return false
+//   - zephyr: full implementation (nvs_fs on the storage partition)
+//   - linux:  in-memory implementation for host applications and tests
 // ---------------------------------------------------------------------------
 
 namespace rtos::nvs
@@ -81,8 +80,8 @@ public:
     /// Open namespace `nspace` (e.g. "URU"). Returns true on success.
     bool open(const char* nspace, Mode mode = Mode::ReadWrite);
 
-    /// Close the namespace. Pending writes that were not committed are lost.
-    /// Safe to call when not opened.
+    /// Close the namespace. Backends with buffered writes may discard changes
+    /// that were not committed. Safe to call when not opened.
     void close();
 
     bool opened() const { return opened_; }
@@ -103,7 +102,7 @@ public:
     bool get_i32(const char* key, int32_t& out);
 
     // -----------------------------------------------------------------------
-    // Setters — return true on success. Call commit() to flush to flash.
+    // Setters — return true on success. Call commit() for buffered backends.
     // -----------------------------------------------------------------------
 
     bool set_str(const char* key, const char* value);
@@ -114,7 +113,7 @@ public:
     /// Remove a key from the namespace.
     bool erase_key(const char* key);
 
-    /// Flush pending writes to flash.
+    /// Flush pending writes. This is a no-op on write-through backends.
     bool commit();
 
 private:

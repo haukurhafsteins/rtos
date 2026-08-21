@@ -183,7 +183,9 @@ button.enable_interrupt(Trigger::Falling);
 ### Example 4 — Interrupt via RTOS Queue
 
 ```cpp
-rtos::gpio::rtos::Queue<Event> queue;
+#include "rtos/Queue.hpp"
+
+rtos::Queue<Event> queue(8);
 
 Pin button = Pin::make(2, { .mode = Mode::Input });
 button.attach_queue(&queue);

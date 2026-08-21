@@ -32,6 +32,14 @@ endif()
 
 include(GoogleTest)
 
+add_test(
+    NAME zephyr_build_integration_contract
+    COMMAND
+        ${CMAKE_COMMAND}
+        -DRTOS_ROOT=${CMAKE_CURRENT_LIST_DIR}/..
+        -P ${CMAKE_CURRENT_LIST_DIR}/zephyr_build_integration_test.cmake
+)
+
 add_library(rtos_host_support STATIC
     ../src/rtos_common.cpp
     ../src/rtos_log.cpp
@@ -53,6 +61,7 @@ target_include_directories(rtos_host_support
 add_executable(rtos_host_tests
     final_log_output_test.cpp
     log_test.cpp
+    nvs_test.cpp
     ring_buffer_test.cpp
 )
 
@@ -74,71 +83,106 @@ endif()
 
 gtest_discover_tests(rtos_host_tests)
 
-add_executable(rtos_zephyr_task_queue_tests
-    zephyr_task_queue_test.cpp
-    ../backends/zephyr/rtos_task_queue.cpp
+add_executable(rtos_zephyr_nvs_tests
+    zephyr_nvs_stubs.cpp
+    zephyr_nvs_test.cpp
+    ../backends/zephyr/rtos_nvs.cpp
 )
 
-target_link_libraries(rtos_zephyr_task_queue_tests
+target_link_libraries(rtos_zephyr_nvs_tests
     PRIVATE
         GTest::gtest_main
 )
 
-target_include_directories(rtos_zephyr_task_queue_tests
+target_include_directories(rtos_zephyr_nvs_tests
     PRIVATE
         ../include
         stubs
 )
 
 if(MSVC)
-    target_compile_options(rtos_zephyr_task_queue_tests PRIVATE /W4)
+    target_compile_options(rtos_zephyr_nvs_tests PRIVATE /W4)
 else()
-    target_compile_options(rtos_zephyr_task_queue_tests PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(rtos_zephyr_nvs_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-gtest_discover_tests(rtos_zephyr_task_queue_tests)
+gtest_discover_tests(rtos_zephyr_nvs_tests)
 
-add_executable(rtos_zephyr_message_buffer_tests
-    zephyr_message_buffer_test.cpp
-    ../backends/zephyr/rtos_message_buffer.cpp
+add_executable(rtos_zephyr_bus_tests
+    zephyr_bus_stubs.cpp
+    zephyr_bus_test.cpp
+    ../backends/zephyr/rtos_spi.cpp
+    ../backends/zephyr/rtos_i2c.cpp
 )
 
-target_link_libraries(rtos_zephyr_message_buffer_tests
+target_link_libraries(rtos_zephyr_bus_tests
     PRIVATE
         GTest::gtest_main
 )
 
-target_include_directories(rtos_zephyr_message_buffer_tests
+target_include_directories(rtos_zephyr_bus_tests
     PRIVATE
         ../include
         stubs
 )
 
 if(MSVC)
-    target_compile_options(rtos_zephyr_message_buffer_tests PRIVATE /W4)
+    target_compile_options(rtos_zephyr_bus_tests PRIVATE /W4)
 else()
-    target_compile_options(rtos_zephyr_message_buffer_tests PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(rtos_zephyr_bus_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-gtest_discover_tests(rtos_zephyr_message_buffer_tests)
+gtest_discover_tests(rtos_zephyr_bus_tests)
 
-add_executable(rtos_zephyr_msgbuffer_header_compile
-    zephyr_msgbuffer_header_compile.cpp
+add_executable(rtos_zephyr_gpio_tests
+    zephyr_gpio_stubs.cpp
+    zephyr_gpio_test.cpp
+    ../src/rtos_common.cpp
+    ../backends/zephyr/rtos_backend.cpp
 )
 
-target_compile_definitions(rtos_zephyr_msgbuffer_header_compile
+target_link_libraries(rtos_zephyr_gpio_tests
     PRIVATE
-        __ZEPHYR__=1
+        GTest::gtest_main
 )
 
-target_include_directories(rtos_zephyr_msgbuffer_header_compile
-    BEFORE PRIVATE
-        no_std_mutex
+target_include_directories(rtos_zephyr_gpio_tests
+    PRIVATE
         ../include
+        stubs_gpio
         stubs
 )
 
-add_test(
-    NAME zephyr_msgbuffer_header_compile
-    COMMAND rtos_zephyr_msgbuffer_header_compile
+if(MSVC)
+    target_compile_options(rtos_zephyr_gpio_tests PRIVATE /W4)
+else()
+    target_compile_options(rtos_zephyr_gpio_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+gtest_discover_tests(rtos_zephyr_gpio_tests)
+
+add_executable(rtos_zephyr_memory_appinfo_tests
+    zephyr_memory_appinfo_stubs.cpp
+    zephyr_memory_appinfo_test.cpp
+    ../backends/zephyr/rtos_psram.cpp
+    ../backends/zephyr/rtos_app_info.cpp
 )
+
+target_link_libraries(rtos_zephyr_memory_appinfo_tests
+    PRIVATE
+        GTest::gtest_main
+)
+
+target_include_directories(rtos_zephyr_memory_appinfo_tests
+    PRIVATE
+        ../include
+        stubs_memory_appinfo
+)
+
+if(MSVC)
+    target_compile_options(rtos_zephyr_memory_appinfo_tests PRIVATE /W4)
+else()
+    target_compile_options(rtos_zephyr_memory_appinfo_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+gtest_discover_tests(rtos_zephyr_memory_appinfo_tests)
