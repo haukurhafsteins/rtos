@@ -1,5 +1,7 @@
 #pragma once
 
+#include <span>
+
 #include "rtos/MsgBuffer.hpp"
 #include "rtos/Task.hpp"
 #include "rtos/time.hpp"

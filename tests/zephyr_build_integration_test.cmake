@@ -49,6 +49,7 @@ set(RTOS_FEATURES
     RTOS_WATCHDOG
     RTOS_PSRAM
     RTOS_APP_INFO
+    RTOS_SYSTEM
 )
 
 foreach(feature IN LISTS RTOS_FEATURES)
@@ -80,6 +81,7 @@ set(expected_sources
     ../backends/zephyr/rtos_watchdog.cpp
     ../backends/zephyr/rtos_psram.cpp
     ../backends/zephyr/rtos_app_info.cpp
+    ../backends/zephyr/rtos_system.cpp
 )
 assert_equal("selected sources" "${sources}" "${expected_sources}")
 

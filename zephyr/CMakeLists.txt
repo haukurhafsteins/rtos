@@ -14,6 +14,7 @@ foreach(config IN ITEMS
     CONFIG_RTOS_WATCHDOG
     CONFIG_RTOS_PSRAM
     CONFIG_RTOS_APP_INFO
+    CONFIG_RTOS_SYSTEM
 )
     if(${config})
         set(rtos_build_enabled TRUE)
@@ -81,4 +82,8 @@ zephyr_library_sources_ifdef(CONFIG_RTOS_PSRAM
 
 zephyr_library_sources_ifdef(CONFIG_RTOS_APP_INFO
     ../backends/zephyr/rtos_app_info.cpp
+)
+
+zephyr_library_sources_ifdef(CONFIG_RTOS_SYSTEM
+    ../backends/zephyr/rtos_system.cpp
 )

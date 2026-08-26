@@ -84,4 +84,9 @@ config RTOS_APP_INFO
 	  Build application version, static chip capability, and hardware device
 	  identifier reporting.
 
+config RTOS_SYSTEM
+	bool "System control backend"
+	help
+	  Build the portable cold-restart implementation.
+
 endmenu
