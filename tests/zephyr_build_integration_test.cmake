@@ -19,6 +19,10 @@ function(zephyr_library_sources source)
     set_property(GLOBAL APPEND PROPERTY RTOS_TEST_SOURCES ${source} ${ARGN})
 endfunction()
 
+function(zephyr_library_compile_definitions_ifdef feature_toggle)
+    # Definition bookkeeping is not part of this contract; accept and ignore.
+endfunction()
+
 function(zephyr_library_sources_ifdef feature_toggle source)
     if(${${feature_toggle}})
         zephyr_library_sources(${source} ${ARGN})

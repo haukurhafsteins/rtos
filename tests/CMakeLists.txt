@@ -83,6 +83,15 @@ endif()
 
 gtest_discover_tests(rtos_host_tests)
 
+add_executable(rtos_cpp20_header_compatibility_test
+    cpp20_header_compatibility_test.cpp
+)
+target_include_directories(rtos_cpp20_header_compatibility_test PRIVATE ../include)
+add_test(
+    NAME Cpp20HeaderCompatibilityTest.MutexAndRingBufferCoexist
+    COMMAND rtos_cpp20_header_compatibility_test
+)
+
 add_executable(rtos_zephyr_nvs_tests
     zephyr_nvs_stubs.cpp
     zephyr_nvs_test.cpp
