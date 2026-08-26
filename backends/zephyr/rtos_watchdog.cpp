@@ -4,8 +4,8 @@
 // timeout as its reload period, and a thread -> channel table lets feed()
 // and remove() operate on the calling thread, matching the espidf model.
 // The hardware watchdog behind task_wdt is taken from the devicetree alias
-// "watchdog0" when present; task_wdt falls back to a pure software timer
-// otherwise.
+// "watchdog0" only when CONFIG_TASK_WDT_HW_FALLBACK is enabled. Otherwise
+// task_wdt uses its software timer without touching the hardware watchdog.
 
 #include "rtos/watchdog.hpp"
 
@@ -53,7 +53,10 @@ void log_only_expiry(int /*channel_id*/, void* user_data)
 
 bool rtos::watchdog::init(const Config& cfg)
 {
-    const struct device* hw_wdt = DEVICE_DT_GET_OR_NULL(DT_ALIAS(watchdog0));
+    const struct device* hw_wdt = nullptr;
+#if defined(CONFIG_TASK_WDT_HW_FALLBACK) && CONFIG_TASK_WDT_HW_FALLBACK
+    hw_wdt = DEVICE_DT_GET_OR_NULL(DT_ALIAS(watchdog0));
+#endif
 
     reload_ms        = static_cast<uint32_t>(cfg.timeout.count());
     panic_on_timeout = cfg.panic_on_timeout;

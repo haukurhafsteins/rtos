@@ -133,6 +133,22 @@ endif()
 
 gtest_discover_tests(rtos_zephyr_task_queue_tests)
 
+foreach(watchdog_fallback IN ITEMS 0 1)
+    add_executable(rtos_zephyr_watchdog_fallback_${watchdog_fallback}_tests
+        zephyr_watchdog_stubs.cpp
+        zephyr_watchdog_test.cpp
+        ../backends/zephyr/rtos_watchdog.cpp
+    )
+    target_link_libraries(rtos_zephyr_watchdog_fallback_${watchdog_fallback}_tests
+        PRIVATE GTest::gtest_main)
+    target_include_directories(rtos_zephyr_watchdog_fallback_${watchdog_fallback}_tests
+        PRIVATE ../include stubs_watchdog)
+    target_compile_definitions(rtos_zephyr_watchdog_fallback_${watchdog_fallback}_tests
+        PRIVATE CONFIG_TASK_WDT_HW_FALLBACK=${watchdog_fallback})
+    gtest_discover_tests(rtos_zephyr_watchdog_fallback_${watchdog_fallback}_tests
+        TEST_PREFIX "Fallback${watchdog_fallback}.")
+endforeach()
+
 add_executable(rtos_cpp20_header_compatibility_test
     cpp20_header_compatibility_test.cpp
 )
