@@ -112,6 +112,21 @@ if(heap_size_position EQUAL -1)
     message(FATAL_ERROR "zephyr/Kconfig is missing config RTOS_PSRAM_HEAP_SIZE")
 endif()
 
+foreach(contract IN ITEMS
+    "config RTOS_TASK_STACK_SMALL_BYTES"
+    "config RTOS_TASK_STACK_SMALL_SLOTS"
+    "config RTOS_TASK_STACK_LARGE_BYTES"
+    "config RTOS_TASK_STACK_LARGE_SLOTS"
+    "default 0"
+    "default 16"
+    "default 10240"
+)
+    string(FIND "${kconfig}" "${contract}" contract_position)
+    if(contract_position EQUAL -1)
+        message(FATAL_ERROR "zephyr/Kconfig is missing task stack contract: ${contract}")
+    endif()
+endforeach()
+
 foreach(dependency IN ITEMS
     "depends on MULTITHREADING && RTOS_LOG && HEAP_MEM_POOL_SIZE > 0"
     "depends on MULTITHREADING && HEAP_MEM_POOL_SIZE > 0"

@@ -26,6 +26,40 @@ config RTOS_TASK_QUEUE
 	help
 	  Build the static task registry and k_msgq-backed queue implementation.
 
+config RTOS_TASK_STACK_SMALL_BYTES
+	int "Small task stack size in bytes"
+	depends on RTOS_TASK_QUEUE
+	range 0 2147483647
+	default 0
+	help
+	  Backing size of each small static task stack. This may be zero only when
+	  RTOS_TASK_STACK_SMALL_SLOTS is zero.
+
+config RTOS_TASK_STACK_SMALL_SLOTS
+	int "Small task stack slot count"
+	depends on RTOS_TASK_QUEUE
+	range 0 1024
+	default 0
+	help
+	  Number of small static task stacks to reserve.
+
+config RTOS_TASK_STACK_LARGE_BYTES
+	int "Large task stack size in bytes"
+	depends on RTOS_TASK_QUEUE
+	range 0 2147483647
+	default 10240
+	help
+	  Backing size of each large static task stack. This may be zero only when
+	  RTOS_TASK_STACK_LARGE_SLOTS is zero.
+
+config RTOS_TASK_STACK_LARGE_SLOTS
+	int "Large task stack slot count"
+	depends on RTOS_TASK_QUEUE
+	range 0 1024
+	default 16
+	help
+	  Number of large static task stacks to reserve.
+
 config RTOS_MESSAGE_BUFFER
 	bool "Message buffer backend"
 	depends on MULTITHREADING && HEAP_MEM_POOL_SIZE > 0

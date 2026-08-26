@@ -344,25 +344,110 @@ TEST_F(ZephyrTaskQueueTest, RejectsPriorityOutsideConfiguredPreemptiveRange)
     EXPECT_EQ(invalid, nullptr);
 }
 
-TEST_F(ZephyrTaskQueueTest, ReusesOneOfSixteenStaticTaskSlotsAfterDelete)
+TEST_F(ZephyrTaskQueueTest, ChoosesSmallestAvailableStackClass)
 {
-    for (int index = 0; index < 16; ++index)
-        ASSERT_NE(createTask(), nullptr);
+    ASSERT_NE(createTask(5, 4096), nullptr);
+    ASSERT_NE(createTask(5, 4097), nullptr);
+
+    ASSERT_EQ(s_threadCreates.size(), 2u);
+    EXPECT_EQ(s_threadCreates[0].stackSize, 4096u);
+    EXPECT_EQ(s_threadCreates[1].stackSize, 10240u);
+}
+
+TEST_F(ZephyrTaskQueueTest, SupportsThreeSmallAndOneLargeSimultaneousTasks)
+{
+    for (int index = 0; index < 3; ++index)
+        ASSERT_NE(createTask(5, 4096), nullptr);
+    ASSERT_NE(createTask(5, 10240), nullptr);
+
+    ASSERT_EQ(s_threadCreates.size(), 4u);
+    EXPECT_EQ(s_threadCreates[0].stackSize, 4096u);
+    EXPECT_EQ(s_threadCreates[1].stackSize, 4096u);
+    EXPECT_EQ(s_threadCreates[2].stackSize, 4096u);
+    EXPECT_EQ(s_threadCreates[3].stackSize, 10240u);
+    EXPECT_NE(s_threadCreates[0].stack, s_threadCreates[1].stack);
+    EXPECT_NE(s_threadCreates[0].stack, s_threadCreates[2].stack);
+    EXPECT_NE(s_threadCreates[0].stack, s_threadCreates[3].stack);
+    EXPECT_NE(s_threadCreates[1].stack, s_threadCreates[2].stack);
+    EXPECT_NE(s_threadCreates[1].stack, s_threadCreates[3].stack);
+    EXPECT_NE(s_threadCreates[2].stack, s_threadCreates[3].stack);
+}
+
+TEST_F(ZephyrTaskQueueTest, UsesLargeClassWhenSmallClassIsExhausted)
+{
+    for (int index = 0; index < 3; ++index)
+        ASSERT_NE(createTask(5, 4096), nullptr);
+
+    ASSERT_NE(createTask(5, 4096), nullptr);
+    ASSERT_EQ(s_threadCreates.size(), 4u);
+    EXPECT_EQ(s_threadCreates.back().stackSize, 10240u);
+}
+
+TEST_F(ZephyrTaskQueueTest, LogsRequestedSizeAndAvailabilityWhenPoolIsExhausted)
+{
+    for (int index = 0; index < 3; ++index)
+        ASSERT_NE(createTask(5, 4096), nullptr);
+    ASSERT_NE(createTask(5, 10240), nullptr);
 
     rtos::backend::TaskHandle overflow = reinterpret_cast<void *>(0x1);
     EXPECT_FALSE(rtos::backend::task_create(
         overflow, "overflow", 4096, 5, userTask, nullptr));
     EXPECT_EQ(overflow, nullptr);
 
-    auto released = taskHandles.front();
-    rtos::backend::task_delete(released);
-    forgetTask(released);
-    EXPECT_NE(createTask(), nullptr);
+    ASSERT_EQ(s_logCalls, 1);
+    EXPECT_EQ(s_lastLogLevel, rtos::LogLevel::Error);
+    EXPECT_EQ(s_lastLogTag, "rtos.task");
+    EXPECT_NE(s_lastLogMessage.find("4096"), std::string::npos);
+    EXPECT_NE(s_lastLogMessage.find("small 0/3"), std::string::npos);
+    EXPECT_NE(s_lastLogMessage.find("large 0/1"), std::string::npos);
+}
+
+TEST_F(ZephyrTaskQueueTest, LogsFailureWhenLargeClassCannotFitAnotherTask)
+{
+    ASSERT_NE(createTask(5, 10240), nullptr);
+
+    rtos::backend::TaskHandle overflow = reinterpret_cast<void *>(0x1);
+    EXPECT_FALSE(rtos::backend::task_create(
+        overflow, "large-overflow", 10240, 5, userTask, nullptr));
+    EXPECT_EQ(overflow, nullptr);
+
+    ASSERT_EQ(s_logCalls, 1);
+    EXPECT_NE(s_lastLogMessage.find("10240"), std::string::npos);
+    EXPECT_NE(s_lastLogMessage.find("small 3/3"), std::string::npos);
+    EXPECT_NE(s_lastLogMessage.find("large 0/1"), std::string::npos);
+}
+
+TEST_F(ZephyrTaskQueueTest, ReusesSmallClassSlotAfterDelete)
+{
+    const auto original = createTask(5, 4096);
+    ASSERT_NE(original, nullptr);
+    const auto *originalStack = s_threadCreates.back().stack;
+
+    rtos::backend::task_delete(original);
+    forgetTask(original);
+
+    ASSERT_NE(createTask(5, 4096), nullptr);
+    EXPECT_EQ(s_threadCreates.back().stack, originalStack);
+    EXPECT_EQ(s_threadCreates.back().stackSize, 4096u);
+}
+
+TEST_F(ZephyrTaskQueueTest, ReusesLargeClassSlotAfterDelete)
+{
+    const auto original = createTask(5, 10240);
+    ASSERT_NE(original, nullptr);
+    const auto *originalStack = s_threadCreates.back().stack;
+
+    rtos::backend::task_delete(original);
+    forgetTask(original);
+
+    ASSERT_NE(createTask(5, 10240), nullptr);
+    EXPECT_EQ(s_threadCreates.back().stack, originalStack);
+    EXPECT_EQ(s_threadCreates.back().stackSize, 10240u);
 }
 
 TEST_F(ZephyrTaskQueueTest, ReusesStaticTaskSlotWhenTaskFunctionReturns)
 {
-    for (int index = 0; index < 16; ++index)
+    for (int index = 0; index < 3; ++index)
         ASSERT_NE(createTask(), nullptr);
 
     const auto finished = taskHandles.front();
@@ -395,7 +480,7 @@ TEST_F(ZephyrTaskQueueTest, WaitsForPreviousThreadExitBeforeReusingStaticSlot)
 
 TEST_F(ZephyrTaskQueueTest, ReleasesStaticTaskSlotBeforeSelfAbortDoesNotReturn)
 {
-    for (int index = 0; index < 16; ++index)
+    for (int index = 0; index < 3; ++index)
         ASSERT_NE(createTask(), nullptr);
 
     const auto self = taskHandles.front();
@@ -447,6 +532,9 @@ TEST_F(ZephyrTaskQueueTest, ExposesDelayYieldCurrentAndDelete)
 TEST_F(ZephyrTaskQueueTest, ReportsThreadAndStackAdmissionFailures)
 {
     EXPECT_EQ(createTask(5, 1024 * 1024), nullptr);
+    EXPECT_TRUE(s_threadCreates.empty());
+    ASSERT_EQ(s_logCalls, 1);
+    EXPECT_NE(s_lastLogMessage.find("1048576"), std::string::npos);
 
     s_failThreadCreate = true;
     EXPECT_EQ(createTask(), nullptr);

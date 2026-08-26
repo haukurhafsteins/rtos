@@ -41,6 +41,15 @@ add_test(
 )
 
 add_test(
+    NAME zephyr_task_stack_pool_compile_contract
+    COMMAND
+        ${CMAKE_COMMAND}
+        -DRTOS_ROOT=${CMAKE_CURRENT_LIST_DIR}/..
+        -DCXX_COMPILER=${CMAKE_CXX_COMPILER}
+        -P ${CMAKE_CURRENT_LIST_DIR}/zephyr_task_stack_pool_compile_test.cmake
+)
+
+add_test(
     NAME msg_buffer_task_header_self_containment_contract
     COMMAND
         ${CMAKE_COMMAND}
@@ -100,6 +109,29 @@ else()
 endif()
 
 gtest_discover_tests(rtos_host_tests)
+
+add_executable(rtos_zephyr_task_queue_tests
+    zephyr_task_queue_test.cpp
+    ../backends/zephyr/rtos_task_queue.cpp
+)
+
+target_link_libraries(rtos_zephyr_task_queue_tests PRIVATE GTest::gtest_main)
+target_include_directories(rtos_zephyr_task_queue_tests PRIVATE ../include stubs_task)
+target_compile_definitions(rtos_zephyr_task_queue_tests
+    PRIVATE
+        CONFIG_RTOS_TASK_STACK_SMALL_BYTES=4096
+        CONFIG_RTOS_TASK_STACK_SMALL_SLOTS=3
+        CONFIG_RTOS_TASK_STACK_LARGE_BYTES=10240
+        CONFIG_RTOS_TASK_STACK_LARGE_SLOTS=1
+)
+
+if(MSVC)
+    target_compile_options(rtos_zephyr_task_queue_tests PRIVATE /W4)
+else()
+    target_compile_options(rtos_zephyr_task_queue_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+gtest_discover_tests(rtos_zephyr_task_queue_tests)
 
 add_executable(rtos_cpp20_header_compatibility_test
     cpp20_header_compatibility_test.cpp
