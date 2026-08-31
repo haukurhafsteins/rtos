@@ -40,6 +40,31 @@ add_test(
         -P ${CMAKE_CURRENT_LIST_DIR}/zephyr_build_integration_test.cmake
 )
 
+add_test(
+    NAME zephyr_task_stack_pool_compile_contract
+    COMMAND
+        ${CMAKE_COMMAND}
+        -DRTOS_ROOT=${CMAKE_CURRENT_LIST_DIR}/..
+        -DCXX_COMPILER=${CMAKE_CXX_COMPILER}
+        -P ${CMAKE_CURRENT_LIST_DIR}/zephyr_task_stack_pool_compile_test.cmake
+)
+
+add_test(
+    NAME msg_buffer_task_header_self_containment_contract
+    COMMAND
+        ${CMAKE_COMMAND}
+        -DRTOS_ROOT=${CMAKE_CURRENT_LIST_DIR}/..
+        -P ${CMAKE_CURRENT_LIST_DIR}/header_self_containment_test.cmake
+)
+
+add_test(
+    NAME idf_build_integration_contract
+    COMMAND
+        ${CMAKE_COMMAND}
+        -DRTOS_ROOT=${CMAKE_CURRENT_LIST_DIR}/..
+        -P ${CMAKE_CURRENT_LIST_DIR}/idf_build_integration_test.cmake
+)
+
 add_library(rtos_host_support STATIC
     ../src/rtos_common.cpp
     ../src/rtos_log.cpp
@@ -49,6 +74,7 @@ add_library(rtos_host_support STATIC
     ../backends/linux/rtos_i2c.cpp
     ../backends/linux/rtos_nvs.cpp
     ../backends/linux/rtos_watchdog.cpp
+    ../backends/linux/rtos_system.cpp
 )
 
 target_include_directories(rtos_host_support
@@ -63,6 +89,7 @@ add_executable(rtos_host_tests
     log_test.cpp
     nvs_test.cpp
     ring_buffer_test.cpp
+    system_test.cpp
 )
 
 target_link_libraries(rtos_host_tests
@@ -83,6 +110,45 @@ endif()
 
 gtest_discover_tests(rtos_host_tests)
 
+add_executable(rtos_zephyr_task_queue_tests
+    zephyr_task_queue_test.cpp
+    ../backends/zephyr/rtos_task_queue.cpp
+)
+
+target_link_libraries(rtos_zephyr_task_queue_tests PRIVATE GTest::gtest_main)
+target_include_directories(rtos_zephyr_task_queue_tests PRIVATE ../include stubs_task)
+target_compile_definitions(rtos_zephyr_task_queue_tests
+    PRIVATE
+        CONFIG_RTOS_TASK_STACK_SMALL_BYTES=4096
+        CONFIG_RTOS_TASK_STACK_SMALL_SLOTS=3
+        CONFIG_RTOS_TASK_STACK_LARGE_BYTES=10240
+        CONFIG_RTOS_TASK_STACK_LARGE_SLOTS=1
+)
+
+if(MSVC)
+    target_compile_options(rtos_zephyr_task_queue_tests PRIVATE /W4)
+else()
+    target_compile_options(rtos_zephyr_task_queue_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+gtest_discover_tests(rtos_zephyr_task_queue_tests)
+
+foreach(watchdog_fallback IN ITEMS 0 1)
+    add_executable(rtos_zephyr_watchdog_fallback_${watchdog_fallback}_tests
+        zephyr_watchdog_stubs.cpp
+        zephyr_watchdog_test.cpp
+        ../backends/zephyr/rtos_watchdog.cpp
+    )
+    target_link_libraries(rtos_zephyr_watchdog_fallback_${watchdog_fallback}_tests
+        PRIVATE GTest::gtest_main)
+    target_include_directories(rtos_zephyr_watchdog_fallback_${watchdog_fallback}_tests
+        PRIVATE ../include stubs_watchdog)
+    target_compile_definitions(rtos_zephyr_watchdog_fallback_${watchdog_fallback}_tests
+        PRIVATE CONFIG_TASK_WDT_HW_FALLBACK=${watchdog_fallback})
+    gtest_discover_tests(rtos_zephyr_watchdog_fallback_${watchdog_fallback}_tests
+        TEST_PREFIX "Fallback${watchdog_fallback}.")
+endforeach()
+
 add_executable(rtos_cpp20_header_compatibility_test
     cpp20_header_compatibility_test.cpp
 )
@@ -91,6 +157,37 @@ add_test(
     NAME Cpp20HeaderCompatibilityTest.MutexAndRingBufferCoexist
     COMMAND rtos_cpp20_header_compatibility_test
 )
+
+add_executable(rtos_msg_buffer_task_header_compile_test
+    msg_buffer_task_header_compile_test.cpp
+)
+target_include_directories(rtos_msg_buffer_task_header_compile_test PRIVATE ../include)
+add_test(
+    NAME MsgBufferTaskHeaderCompileTest.StandaloneCxx20
+    COMMAND rtos_msg_buffer_task_header_compile_test
+)
+
+add_executable(rtos_system_header_compile_test
+    system_header_compile_test.cpp
+)
+target_link_libraries(rtos_system_header_compile_test PRIVATE rtos_host_support)
+add_test(
+    NAME SystemHeaderCompileTest.PublicHeaderLinks
+    COMMAND rtos_system_header_compile_test
+)
+
+add_executable(rtos_zephyr_system_tests
+    zephyr_system_test.cpp
+    ../backends/zephyr/rtos_system.cpp
+)
+target_link_libraries(rtos_zephyr_system_tests PRIVATE GTest::gtest_main)
+target_include_directories(rtos_zephyr_system_tests PRIVATE ../include stubs)
+if(MSVC)
+    target_compile_options(rtos_zephyr_system_tests PRIVATE /W4)
+else()
+    target_compile_options(rtos_zephyr_system_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+gtest_discover_tests(rtos_zephyr_system_tests)
 
 add_executable(rtos_zephyr_nvs_tests
     zephyr_nvs_stubs.cpp

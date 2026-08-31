@@ -6,9 +6,10 @@ idf_component_register(
         "backends/espidf/rtos_i2c.cpp"
         "backends/espidf/rtos_nvs.cpp"
         "backends/espidf/rtos_watchdog.cpp"
+        "backends/espidf/rtos_system.cpp"
         "src/rtos_common.cpp"
     INCLUDE_DIRS
         "include"
     REQUIRES
-        driver esp_timer esp_app_format nvs_flash esp_event
+        driver esp_timer esp_app_format nvs_flash esp_event esp_system
 )

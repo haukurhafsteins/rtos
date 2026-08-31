@@ -49,6 +49,7 @@ set(RTOS_FEATURES
     RTOS_WATCHDOG
     RTOS_PSRAM
     RTOS_APP_INFO
+    RTOS_SYSTEM
 )
 
 foreach(feature IN LISTS RTOS_FEATURES)
@@ -80,6 +81,7 @@ set(expected_sources
     ../backends/zephyr/rtos_watchdog.cpp
     ../backends/zephyr/rtos_psram.cpp
     ../backends/zephyr/rtos_app_info.cpp
+    ../backends/zephyr/rtos_system.cpp
 )
 assert_equal("selected sources" "${sources}" "${expected_sources}")
 
@@ -109,6 +111,21 @@ string(FIND "${kconfig}" "config RTOS_PSRAM_HEAP_SIZE" heap_size_position)
 if(heap_size_position EQUAL -1)
     message(FATAL_ERROR "zephyr/Kconfig is missing config RTOS_PSRAM_HEAP_SIZE")
 endif()
+
+foreach(contract IN ITEMS
+    "config RTOS_TASK_STACK_SMALL_BYTES"
+    "config RTOS_TASK_STACK_SMALL_SLOTS"
+    "config RTOS_TASK_STACK_LARGE_BYTES"
+    "config RTOS_TASK_STACK_LARGE_SLOTS"
+    "default 0"
+    "default 16"
+    "default 10240"
+)
+    string(FIND "${kconfig}" "${contract}" contract_position)
+    if(contract_position EQUAL -1)
+        message(FATAL_ERROR "zephyr/Kconfig is missing task stack contract: ${contract}")
+    endif()
+endforeach()
 
 foreach(dependency IN ITEMS
     "depends on MULTITHREADING && RTOS_LOG && HEAP_MEM_POOL_SIZE > 0"

@@ -6,24 +6,29 @@
 
 #include <zephyr/kernel.h>
 
-#ifndef RTOS_ZEPHYR_MAX_TASKS
-#define RTOS_ZEPHYR_MAX_TASKS 16
-#endif
-
-#ifndef RTOS_ZEPHYR_MAX_TASK_STACK_BYTES
-#define RTOS_ZEPHYR_MAX_TASK_STACK_BYTES (10U * 1024U)
-#endif
-
 namespace
 {
 using rtos::TaskFunction;
 
-constexpr std::size_t TASK_SLOT_COUNT = RTOS_ZEPHYR_MAX_TASKS;
-constexpr std::size_t TASK_STACK_BYTES = RTOS_ZEPHYR_MAX_TASK_STACK_BYTES;
+constexpr std::size_t SMALL_STACK_BYTES = CONFIG_RTOS_TASK_STACK_SMALL_BYTES;
+constexpr std::size_t SMALL_STACK_SLOTS = CONFIG_RTOS_TASK_STACK_SMALL_SLOTS;
+constexpr std::size_t LARGE_STACK_BYTES = CONFIG_RTOS_TASK_STACK_LARGE_BYTES;
+constexpr std::size_t LARGE_STACK_SLOTS = CONFIG_RTOS_TASK_STACK_LARGE_SLOTS;
 constexpr std::uint32_t PRIO_CEIL = CONFIG_NUM_PREEMPT_PRIORITIES - 1U;
 
-static_assert(TASK_SLOT_COUNT > 0, "Zephyr task registry must have at least one slot");
-static_assert(TASK_STACK_BYTES > 0, "Zephyr task stacks must not be empty");
+static_assert(
+    SMALL_STACK_SLOTS + LARGE_STACK_SLOTS > 0,
+    "Zephyr task stack pool must have at least one slot");
+static_assert(
+    SMALL_STACK_SLOTS == 0 || SMALL_STACK_BYTES > 0,
+    "Enabled small task stacks must not be empty");
+static_assert(
+    LARGE_STACK_SLOTS == 0 || LARGE_STACK_BYTES > 0,
+    "Enabled large task stacks must not be empty");
+static_assert(
+    SMALL_STACK_SLOTS == 0 || LARGE_STACK_SLOTS == 0 ||
+        SMALL_STACK_BYTES <= LARGE_STACK_BYTES,
+    "Small task stacks must not exceed large task stacks");
 static_assert(CONFIG_NUM_PREEMPT_PRIORITIES > 0, "Zephyr needs a preemptive priority");
 
 struct TaskSlot
@@ -35,25 +40,100 @@ struct TaskSlot
     bool usedBefore = false;
 };
 
-TaskSlot s_taskSlots[TASK_SLOT_COUNT];
-K_THREAD_STACK_ARRAY_DEFINE(s_taskStacks, TASK_SLOT_COUNT, TASK_STACK_BYTES);
+#if CONFIG_RTOS_TASK_STACK_SMALL_SLOTS > 0
+TaskSlot s_smallTaskSlots[CONFIG_RTOS_TASK_STACK_SMALL_SLOTS];
+K_THREAD_STACK_ARRAY_DEFINE(
+    s_smallTaskStacks,
+    CONFIG_RTOS_TASK_STACK_SMALL_SLOTS,
+    CONFIG_RTOS_TASK_STACK_SMALL_BYTES);
+#endif
+
+#if CONFIG_RTOS_TASK_STACK_LARGE_SLOTS > 0
+TaskSlot s_largeTaskSlots[CONFIG_RTOS_TASK_STACK_LARGE_SLOTS];
+K_THREAD_STACK_ARRAY_DEFINE(
+    s_largeTaskStacks,
+    CONFIG_RTOS_TASK_STACK_LARGE_SLOTS,
+    CONFIG_RTOS_TASK_STACK_LARGE_BYTES);
+#endif
+
 k_spinlock s_taskTableLock;
 
-TaskSlot *reserveTaskSlot()
+struct TaskReservation
 {
-    const auto key = k_spin_lock(&s_taskTableLock);
-    TaskSlot *available = nullptr;
-    for (auto &slot : s_taskSlots)
+    TaskSlot *slot = nullptr;
+    k_thread_stack_t *stack = nullptr;
+    std::size_t stackBytes = 0;
+    std::size_t smallAvailable = 0;
+    std::size_t largeAvailable = 0;
+};
+
+template<std::size_t SlotCount>
+std::size_t countAvailable(TaskSlot (&slots)[SlotCount])
+{
+    std::size_t available = 0;
+    for (const auto &slot : slots)
     {
         if (!slot.occupied)
+            ++available;
+    }
+    return available;
+}
+
+TaskReservation reserveTaskSlot(std::size_t requestedBytes)
+{
+    const auto key = k_spin_lock(&s_taskTableLock);
+    TaskReservation reservation;
+
+#if CONFIG_RTOS_TASK_STACK_SMALL_SLOTS > 0
+    if (requestedBytes <= SMALL_STACK_BYTES)
+    {
+        for (std::size_t index = 0; index < SMALL_STACK_SLOTS; ++index)
         {
-            slot.occupied = true;
-            available = &slot;
-            break;
+            auto &slot = s_smallTaskSlots[index];
+            if (!slot.occupied)
+            {
+                slot.occupied = true;
+                reservation.slot = &slot;
+                reservation.stack = s_smallTaskStacks[index];
+                reservation.stackBytes = K_THREAD_STACK_SIZEOF(
+                    s_smallTaskStacks[index]);
+                break;
+            }
         }
     }
+#endif
+
+#if CONFIG_RTOS_TASK_STACK_LARGE_SLOTS > 0
+    if (!reservation.slot && requestedBytes <= LARGE_STACK_BYTES)
+    {
+        for (std::size_t index = 0; index < LARGE_STACK_SLOTS; ++index)
+        {
+            auto &slot = s_largeTaskSlots[index];
+            if (!slot.occupied)
+            {
+                slot.occupied = true;
+                reservation.slot = &slot;
+                reservation.stack = s_largeTaskStacks[index];
+                reservation.stackBytes = K_THREAD_STACK_SIZEOF(
+                    s_largeTaskStacks[index]);
+                break;
+            }
+        }
+    }
+#endif
+
+    if (!reservation.slot)
+    {
+#if CONFIG_RTOS_TASK_STACK_SMALL_SLOTS > 0
+        reservation.smallAvailable = countAvailable(s_smallTaskSlots);
+#endif
+#if CONFIG_RTOS_TASK_STACK_LARGE_SLOTS > 0
+        reservation.largeAvailable = countAvailable(s_largeTaskSlots);
+#endif
+    }
+
     k_spin_unlock(&s_taskTableLock, key);
-    return available;
+    return reservation;
 }
 
 void releaseTaskSlot(TaskSlot &slot)
@@ -69,7 +149,9 @@ TaskSlot *findTaskSlot(k_tid_t thread)
 {
     const auto key = k_spin_lock(&s_taskTableLock);
     TaskSlot *found = nullptr;
-    for (auto &slot : s_taskSlots)
+
+#if CONFIG_RTOS_TASK_STACK_SMALL_SLOTS > 0
+    for (auto &slot : s_smallTaskSlots)
     {
         if (slot.occupied && &slot.thread == thread)
         {
@@ -77,6 +159,22 @@ TaskSlot *findTaskSlot(k_tid_t thread)
             break;
         }
     }
+#endif
+
+#if CONFIG_RTOS_TASK_STACK_LARGE_SLOTS > 0
+    if (!found)
+    {
+        for (auto &slot : s_largeTaskSlots)
+        {
+            if (slot.occupied && &slot.thread == thread)
+            {
+                found = &slot;
+                break;
+            }
+        }
+    }
+#endif
+
     k_spin_unlock(&s_taskTableLock, key);
     return found;
 }
@@ -127,7 +225,7 @@ bool task_create(
 {
     outHandle = nullptr;
     int zephyrPriority = 0;
-    if (!function || stackSizeBytes == 0 || stackSizeBytes > TASK_STACK_BYTES)
+    if (!function || stackSizeBytes == 0)
         return false;
 
     if (!translatePriority(priority, zephyrPriority))
@@ -139,9 +237,23 @@ bool task_create(
         return false;
     }
 
-    auto *slot = reserveTaskSlot();
+    auto reservation = reserveTaskSlot(stackSizeBytes);
+    auto *slot = reservation.slot;
     if (!slot)
+    {
+        RTOS_LOGE(
+            "rtos.task",
+            "task '%s' requested %u stack bytes; available slots: small %u/%u (%u bytes), large %u/%u (%u bytes)",
+            name ? name : "<unnamed>",
+            stackSizeBytes,
+            static_cast<unsigned>(reservation.smallAvailable),
+            static_cast<unsigned>(SMALL_STACK_SLOTS),
+            static_cast<unsigned>(SMALL_STACK_BYTES),
+            static_cast<unsigned>(reservation.largeAvailable),
+            static_cast<unsigned>(LARGE_STACK_SLOTS),
+            static_cast<unsigned>(LARGE_STACK_BYTES));
         return false;
+    }
 
     if (slot->usedBefore && k_thread_join(&slot->thread, K_FOREVER) != 0)
     {
@@ -154,11 +266,10 @@ bool task_create(
     // Publish reuse state before starting the thread: a K_NO_WAIT task can
     // return and release its slot before k_thread_create itself returns.
     slot->usedBefore = true;
-    const auto slotIndex = static_cast<std::size_t>(slot - s_taskSlots);
     auto *thread = k_thread_create(
         &slot->thread,
-        s_taskStacks[slotIndex],
-        K_THREAD_STACK_SIZEOF(s_taskStacks[slotIndex]),
+        reservation.stack,
+        reservation.stackBytes,
         taskEntry,
         slot,
         nullptr,
