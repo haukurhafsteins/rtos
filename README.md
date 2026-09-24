@@ -13,7 +13,7 @@ The current focus is:
 - monotonic timing utilities
 - lightweight topic/message bus helpers
 - logging wrappers and sinks
-- GPIO and PSRAM helpers where supported by the backend
+- GPIO (pin ids are native GPIO numbers on ESP-IDF, devicetree ids on Zephyr) and PSRAM helpers where supported by the backend
 - heap statistics by memory region (`rtos::memory::heap_stats`: free, largest block and low-water mark for the internal, DMA-capable, external and default heaps)
 - I2C master bus and device
 - SPI master bus and device

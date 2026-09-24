@@ -268,6 +268,27 @@ endif()
 
 gtest_discover_tests(rtos_zephyr_gpio_tests)
 
+add_executable(rtos_espidf_gpio_pinmap_tests
+    espidf_gpio_pinmap_test.cpp
+    ../backends/espidf/rtos_gpio_pinmap.cpp
+)
+
+target_link_libraries(rtos_espidf_gpio_pinmap_tests PRIVATE GTest::gtest_main)
+target_include_directories(rtos_espidf_gpio_pinmap_tests
+    PRIVATE
+        ../include
+        ../backends/espidf
+        stubs_gpio_espidf
+)
+
+if(MSVC)
+    target_compile_options(rtos_espidf_gpio_pinmap_tests PRIVATE /W4)
+else()
+    target_compile_options(rtos_espidf_gpio_pinmap_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+gtest_discover_tests(rtos_espidf_gpio_pinmap_tests)
+
 add_executable(rtos_zephyr_memory_appinfo_tests
     zephyr_memory_appinfo_stubs.cpp
     zephyr_memory_appinfo_test.cpp

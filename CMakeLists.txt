@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS
         "backends/espidf/rtos_backend.cpp"
+        "backends/espidf/rtos_gpio_pinmap.cpp"
         "backends/espidf/rtos_final_log_output.cpp"
         "backends/espidf/rtos_spi.cpp"
         "backends/espidf/rtos_i2c.cpp"

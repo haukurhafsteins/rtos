@@ -77,7 +77,7 @@ namespace rtos
         // Event delivered from ISR->task via callback or queue
         struct Event
         {
-            int pin_id;            // logical pin id in your board map
+            int pin_id;            // the pin_id the Pin was made with
             Trigger trigger;       // which edge/level
             bool level;            // sampled digital level
             uint32_t isr_count;    // monotonically increasing for this pin
@@ -113,8 +113,14 @@ namespace rtos
             Pin &operator=(const Pin &) = delete;
             ~Pin();
 
-            // Factory — maps a logical pin id (board-specific) to the platform pin
+            // Factory. What pin_id means is the backend's call (see Gpio.md): on ESP-IDF it
+            // is the native GPIO number, on Zephyr a logical board id resolved through the
+            // devicetree table. An id the backend cannot resolve is logged and yields an
+            // empty Pin: valid() is false, id() is -1 and the IO calls do nothing.
             static Pin make(int pin_id, const Config &cfg = {});
+
+            // False for a Pin that make() could not resolve (or a moved-from Pin).
+            bool valid() const { return impl_ != nullptr; }
 
             // Reconfigure at runtime (safe to call while enabled)
             void reconfigure(const Config &cfg);

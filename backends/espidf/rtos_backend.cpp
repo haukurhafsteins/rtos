@@ -638,61 +638,13 @@ void EspIdfLogSink::write(LogLevel level, const char *tag, const char *msg, size
 #include <cstdlib>
 #include <cstring>
 
+#include "rtos_gpio_pinmap.hpp"
+
 namespace rtos
 {
     namespace gpio
     {
-        // Board mapping: logical id -> ESP32 GPIO number
-        // Customize this table for your board.
-        static constexpr int kPinMap[] = {
-            // id: 0..N-1 -> gpio_num_t
-            // Example placeholder mapping: {0->GPIO0, 1->GPIO1, ...}
-            // Replace with your real map; invalid entries set to -1
-            GPIO_NUM_0,
-            GPIO_NUM_1,
-            GPIO_NUM_2,
-            GPIO_NUM_3,
-            GPIO_NUM_4,
-            GPIO_NUM_5,
-            GPIO_NUM_6,
-            GPIO_NUM_7,
-            GPIO_NUM_8,
-            GPIO_NUM_9,
-            GPIO_NUM_10,
-            GPIO_NUM_11,
-            GPIO_NUM_12,
-            GPIO_NUM_13,
-            GPIO_NUM_14,
-            GPIO_NUM_15,
-            GPIO_NUM_16,
-            GPIO_NUM_17,
-            GPIO_NUM_18,
-            GPIO_NUM_19,
-            GPIO_NUM_20,
-            GPIO_NUM_21,
-            GPIO_NUM_26,
-            GPIO_NUM_27,
-            GPIO_NUM_28,
-            GPIO_NUM_29,
-            GPIO_NUM_30,
-            GPIO_NUM_31,
-            GPIO_NUM_32,
-            GPIO_NUM_33,
-            GPIO_NUM_34,
-            GPIO_NUM_35,
-            GPIO_NUM_36,
-            GPIO_NUM_37,
-            GPIO_NUM_38,
-            GPIO_NUM_39,
-            GPIO_NUM_40,
-            GPIO_NUM_41,
-            GPIO_NUM_42,
-            GPIO_NUM_43,
-            GPIO_NUM_44,
-            GPIO_NUM_45,
-            GPIO_NUM_46,
-            GPIO_NUM_47,
-            GPIO_NUM_48};
+        static const char *GPIO_TAG = "gpio";
 
         static inline uint64_t now_us() { return esp_timer_get_time(); }
 
@@ -855,20 +807,21 @@ namespace rtos
         void EspIdfImpl::backend_queue_send_from_isr(Queue<Event> *, const Event &) {}
         void EspIdfImpl::backend_defer_to_task(std::function<void()>) {}
 
-        // Factory for ESP-IDF
+        // Factory for ESP-IDF: pin_id is the native GPIO number (HMO-74). An id the chip
+        // does not have is reported at error level and yields an empty Pin (valid() false,
+        // id() -1) whose IO calls are no-ops, so a wrong constant shows up in the log
+        // instead of driving a neighbouring GPIO or dereferencing a null impl.
         Pin Pin::make(int pin_id, const Config &cfg)
         {
-            EspIdfImpl::ensure_isr_service();
-            int gpio = -1;
-            if (pin_id >= 0 && pin_id < (int)(sizeof(kPinMap) / sizeof(kPinMap[0])))
-                gpio = kPinMap[pin_id];
+            Pin p;
+            const int gpio = espidf::native_gpio(pin_id);
             if (gpio < 0)
             {
-                Pin p;
+                RTOS_LOGE(GPIO_TAG, "Pin::make(%d): no such GPIO on this chip; pin left empty", pin_id);
                 return p;
             }
+            EspIdfImpl::ensure_isr_service();
             auto *impl = new EspIdfImpl(gpio, cfg);
-            Pin p;
             p.impl_ = impl;
             p.id_ = pin_id;
             p.cfg_ = cfg;
@@ -878,19 +831,21 @@ namespace rtos
             return p;
         }
 
+        // Every call tolerates an empty Pin: Pin::make() already logged why it is empty.
         void Pin::reconfigure(const Config &cfg)
         {
             cfg_ = cfg;
-            static_cast<EspIdfImpl *>(impl_)->reconfigure(cfg);
+            if (impl_)
+                static_cast<EspIdfImpl *>(impl_)->reconfigure(cfg);
         }
-        bool Pin::read() const { return static_cast<EspIdfImpl *>(impl_)->read(); }
-        void Pin::write(bool l) { static_cast<EspIdfImpl *>(impl_)->write(l); }
-        void Pin::toggle() { static_cast<EspIdfImpl *>(impl_)->toggle(); }
-        void Pin::enable_interrupt(Trigger t) { static_cast<EspIdfImpl *>(impl_)->enable_interrupt(t); }
-        void Pin::disable_interrupt() { static_cast<EspIdfImpl *>(impl_)->disable_interrupt(); }
-        void Pin::set_callback(Callback cb) { static_cast<EspIdfImpl *>(impl_)->set_callback(std::move(cb)); }
-        void Pin::attach_queue(Queue<Event> *q) { static_cast<EspIdfImpl *>(impl_)->attach_queue(q); }
-        void Pin::set_debounce_us(uint32_t us) { static_cast<EspIdfImpl *>(impl_)->set_debounce_us(us); }
+        bool Pin::read() const { return impl_ ? static_cast<EspIdfImpl *>(impl_)->read() : false; }
+        void Pin::write(bool l) { if (impl_) static_cast<EspIdfImpl *>(impl_)->write(l); }
+        void Pin::toggle() { if (impl_) static_cast<EspIdfImpl *>(impl_)->toggle(); }
+        void Pin::enable_interrupt(Trigger t) { if (impl_) static_cast<EspIdfImpl *>(impl_)->enable_interrupt(t); }
+        void Pin::disable_interrupt() { if (impl_) static_cast<EspIdfImpl *>(impl_)->disable_interrupt(); }
+        void Pin::set_callback(Callback cb) { if (impl_) static_cast<EspIdfImpl *>(impl_)->set_callback(std::move(cb)); }
+        void Pin::attach_queue(Queue<Event> *q) { if (impl_) static_cast<EspIdfImpl *>(impl_)->attach_queue(q); }
+        void Pin::set_debounce_us(uint32_t us) { if (impl_) static_cast<EspIdfImpl *>(impl_)->set_debounce_us(us); }
 
     }
 }

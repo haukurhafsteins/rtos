@@ -52,6 +52,24 @@ TEST_F(ZephyrGpioTest, MapsUruWearLogicalPinsFromBoardDevicetree)
     EXPECT_EQ(rtos::gpio::Pin::make(0, config).id(), -1);
 }
 
+TEST_F(ZephyrGpioTest, AnUnresolvedPinIsInvalidAndItsCallsAreNoOps)
+{
+    rtos::gpio::Pin none = rtos::gpio::Pin::make(25);
+    EXPECT_FALSE(none.valid());
+    EXPECT_EQ(none.id(), -1);
+
+    // Must not dereference the missing implementation (HMO-74).
+    none.write(true);
+    none.toggle();
+    EXPECT_FALSE(none.read());
+    none.enable_interrupt(rtos::gpio::Trigger::Both);
+    none.disable_interrupt();
+    none.set_debounce_us(10);
+    none.reconfigure(rtos::gpio::Config{});
+
+    EXPECT_TRUE(rtos::gpio::Pin::make(7).valid());
+}
+
 TEST_F(ZephyrGpioTest, BothEdgeInterruptReportsTheSampledDirection)
 {
     rtos::gpio::Pin touch = rtos::gpio::Pin::make(7);

@@ -252,50 +252,59 @@ Pin Pin::make(int pinId, const Config& cfg)
     return pin;
 }
 
+// Every call tolerates an empty Pin (one make() could not resolve): it does nothing.
 void Pin::reconfigure(const Config& cfg)
 {
     cfg_ = cfg;
-    static_cast<ZephyrImpl*>(impl_)->reconfigure(cfg);
+    if (impl_ != nullptr)
+        static_cast<ZephyrImpl*>(impl_)->reconfigure(cfg);
 }
 
 bool Pin::read() const
 {
-    return static_cast<ZephyrImpl*>(impl_)->read();
+    return impl_ != nullptr && static_cast<ZephyrImpl*>(impl_)->read();
 }
 
 void Pin::write(bool level)
 {
-    static_cast<ZephyrImpl*>(impl_)->write(level);
+    if (impl_ != nullptr)
+        static_cast<ZephyrImpl*>(impl_)->write(level);
 }
 
 void Pin::toggle()
 {
-    static_cast<ZephyrImpl*>(impl_)->toggle();
+    if (impl_ != nullptr)
+        static_cast<ZephyrImpl*>(impl_)->toggle();
 }
 
 void Pin::enable_interrupt(Trigger trigger)
 {
-    static_cast<ZephyrImpl*>(impl_)->enable_interrupt(trigger);
+    if (impl_ != nullptr)
+        static_cast<ZephyrImpl*>(impl_)->enable_interrupt(trigger);
 }
 
 void Pin::disable_interrupt()
 {
-    static_cast<ZephyrImpl*>(impl_)->disable_interrupt();
+    if (impl_ != nullptr)
+        static_cast<ZephyrImpl*>(impl_)->disable_interrupt();
 }
 
 void Pin::set_callback(Callback callback)
 {
-    static_cast<ZephyrImpl*>(impl_)->set_callback(std::move(callback));
+    if (impl_ != nullptr)
+        static_cast<ZephyrImpl*>(impl_)->set_callback(std::move(callback));
 }
 
 void Pin::attach_queue(rtos::Queue<Event>* queue)
 {
-    static_cast<ZephyrImpl*>(impl_)->attach_queue(queue);
+    if (impl_ != nullptr)
+        static_cast<ZephyrImpl*>(impl_)->attach_queue(queue);
 }
 
 void Pin::set_debounce_us(uint32_t microseconds)
 {
-    static_cast<ZephyrImpl*>(impl_)->set_debounce_us(microseconds);
+    if (impl_ != nullptr)
+        static_cast<ZephyrImpl*>(impl_)->set_debounce_us(microseconds);
 }
 
 } // namespace rtos::gpio

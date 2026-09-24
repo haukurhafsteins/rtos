@@ -134,7 +134,17 @@ Represents one GPIO pin with platform-specific backend.
 static Pin make(int pin_id, const Config &cfg = {});
 ```
 
-Creates and initializes a pin instance mapped by a logical board ID.
+Creates and initializes a pin. What `pin_id` means depends on the backend:
+
+| Backend | `pin_id` is |
+| ------- | ----------- |
+| ESP-IDF | the **native GPIO number** (`GPIO_NUM_x`), validated with `GPIO_IS_VALID_GPIO()`. There is no board table in between (HMO-74); pass the same constant you would give `gpio_config()`. |
+| Zephyr  | a **logical board id**, resolved through the devicetree table in `backends/zephyr/rtos_backend.cpp`. |
+
+An id the backend cannot resolve is logged at error level and yields an empty `Pin`:
+`valid()` is `false`, `id()` is `-1`, and `read()`/`write()`/`toggle()` and the interrupt
+calls do nothing. Check `valid()` after `make()` when the pin comes from configuration
+rather than a compile-time constant.
 
 ---
 

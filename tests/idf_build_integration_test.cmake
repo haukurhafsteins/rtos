@@ -7,6 +7,7 @@ endif()
 file(READ "${RTOS_ROOT}/CMakeLists.txt" idf_cmake)
 foreach(required_text IN ITEMS
     "backends/espidf/rtos_system.cpp"
+    "backends/espidf/rtos_gpio_pinmap.cpp"
     "esp_system"
 )
     string(FIND "${idf_cmake}" "${required_text}" position)
