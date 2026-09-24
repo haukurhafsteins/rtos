@@ -158,6 +158,13 @@ add_test(
     COMMAND rtos_cpp20_header_compatibility_test
 )
 
+add_executable(rtos_timeout_argument_test timeout_argument_test.cpp)
+target_include_directories(rtos_timeout_argument_test PRIVATE ../include)
+add_test(
+    NAME TimeoutArgumentTest.DefaultAndExplicitCalls
+    COMMAND rtos_timeout_argument_test
+)
+
 add_executable(rtos_msg_buffer_task_header_compile_test
     msg_buffer_task_header_compile_test.cpp
 )

@@ -273,6 +273,20 @@ ctest --test-dir build-rtos-tests --output-on-failure
 
 These tests are written against the component APIs so they can move with the component into other projects.
 
+`TimeoutArgumentTest.DefaultAndExplicitCalls` instantiates the Queue and MsgBuffer
+wrappers and checks the timeouts they forward to a recording backend. It covers
+omitted arguments, zero, finite milliseconds and the integer forever sentinel.
+Run the host suite in separate build directories with
+`-DCMAKE_CXX_COMPILER=g++` and `-DCMAKE_CXX_COMPILER=clang++` to catch differences
+in how the compilers diagnose template default arguments.
+
+The same test can be compiled without linking for ESP-IDF toolchains (with the
+toolchain on PATH):
+
+```bash
+xtensa-esp32s3-elf-g++ -std=c++20 -Wall -Wextra -Wpedantic -Werror -Iinclude -c tests/timeout_argument_test.cpp -o /tmp/rtos-timeout-arguments.o
+```
+
 ## Status
 
 This component is evolving with the projects that use it. Prefer small additions that cover common cross-project needs, and keep platform-specific or uncommon functionality in the backend or application layer until it becomes a repeated pattern.
