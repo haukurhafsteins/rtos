@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 
 #include "rtos/AppInfo.hpp"
+#include "rtos/memory.hpp"
 #include "rtos/psram.hpp"
 #include "zephyr_memory_appinfo_test.hpp"
 
@@ -73,6 +74,55 @@ TEST_F(ZephyrMemoryTest, ReallocPreservesBytesAndHonorsTheHeapBudget)
 
     EXPECT_EQ(rtos::memory::psram_malloc(57), nullptr);
     rtos::memory::psram_free(resized);
+}
+
+TEST_F(ZephyrMemoryTest, ExternalHeapStatsFollowTheCompatibilityHeap)
+{
+    using rtos::memory::Region;
+
+    const auto idle = rtos::memory::heap_stats(Region::External);
+    EXPECT_EQ(idle.free_bytes, 256u);
+    EXPECT_EQ(idle.minimum_free_bytes, 256u);
+    EXPECT_EQ(idle.largest_free_block, 0u); // Zephyr runtime stats carry no such figure
+
+    void* block = rtos::memory::psram_malloc(100);
+    ASSERT_NE(block, nullptr);
+    const auto loaded = rtos::memory::heap_stats(Region::External);
+    EXPECT_EQ(loaded.free_bytes, 156u);
+    EXPECT_EQ(loaded.minimum_free_bytes, 156u);
+
+    rtos::memory::psram_free(block);
+    const auto released = rtos::memory::heap_stats(Region::External);
+    EXPECT_EQ(released.free_bytes, 256u);
+    EXPECT_EQ(released.minimum_free_bytes, 156u); // the low-water mark keeps the trough
+}
+
+TEST_F(ZephyrMemoryTest, InternalAnyAndDmaReadTheSystemHeap)
+{
+    using rtos::memory::Region;
+    zephyr_memory_appinfo_test::setSystemHeapStats(3000, 1000, 1500);
+
+    for (const Region region : {Region::Internal, Region::Any, Region::Dma})
+    {
+        const auto stats = rtos::memory::heap_stats(region);
+        EXPECT_EQ(stats.free_bytes, 3000u);
+        EXPECT_EQ(stats.minimum_free_bytes, 2500u); // (3000 + 1000) - 1500
+        EXPECT_EQ(stats.largest_free_block, 0u);
+    }
+}
+
+TEST_F(ZephyrMemoryTest, HeapStatsAreZerosWhenTheKernelRefuses)
+{
+    using rtos::memory::Region;
+    zephyr_memory_appinfo_test::setHeapStatsResult(-1);
+
+    for (const Region region : {Region::Internal, Region::External, Region::Any, Region::Dma})
+    {
+        const auto stats = rtos::memory::heap_stats(region);
+        EXPECT_EQ(stats.free_bytes, 0u);
+        EXPECT_EQ(stats.minimum_free_bytes, 0u);
+        EXPECT_EQ(stats.largest_free_block, 0u);
+    }
 }
 
 TEST(ZephyrAppInfoTest, DescriptionUsesPrimaryMcubootImageVersion)

@@ -3,6 +3,7 @@
 #include <cstddef>
 
 #define CONFIG_MCUBOOT_IMG_MANAGER 1
+#define CONFIG_RTOS_PSRAM 1
 #define CONFIG_RTOS_PSRAM_HEAP_SIZE 256
 
 struct sys_heap

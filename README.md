@@ -14,6 +14,7 @@ The current focus is:
 - lightweight topic/message bus helpers
 - logging wrappers and sinks
 - GPIO and PSRAM helpers where supported by the backend
+- heap statistics by memory region (`rtos::memory::heap_stats`: free, largest block and low-water mark for the internal, DMA-capable, external and default heaps)
 - I2C master bus and device
 - SPI master bus and device
 - application build and device information (`AppInfo`)
@@ -34,7 +35,7 @@ Application code sees only `include/`. A backend is selected by compiling the so
 
 Each backend directory implements two porting surfaces:
 
-- `rtos_backend.cpp` implements the small procedural interface in `include/rtos/backend.hpp` (tasks, queues, message buffers, time, logging, GPIO, PSRAM, `AppInfo`). The portable classes such as `rtos::Task` and `rtos::Queue<T>` are written once against it.
+- `rtos_backend.cpp` implements the small procedural interface in `include/rtos/backend.hpp` (tasks, queues, message buffers, time, logging, GPIO, PSRAM, heap statistics, `AppInfo`). The portable classes such as `rtos::Task` and `rtos::Queue<T>` are written once against it.
 - `rtos_spi.cpp` / `rtos_i2c.cpp` implement the driver-like classes whose full interface is declared in `include/rtos/Spi.hpp` and `include/rtos/I2C.hpp`.
 
 When adding new functionality, follow the same rule: simple handle-based primitives go through `backend.hpp` with one implementation per `rtos_backend.cpp`; richer driver-style classes get a complete class declaration in `include/` and a `backends/<backend>/rtos_<name>.cpp` per backend (stubs are fine for backends without support yet).
@@ -241,7 +242,8 @@ Additional utility headers live under `include/`:
 - [`include/buffers/RINGBUFFER.md`](include/buffers/RINGBUFFER.md)
 - [`include/envelope/ENVELOPE.md`](include/envelope/ENVELOPE.md)
 - [`include/Gpio.md`](include/Gpio.md)
-- [`include/RTOS_PSRAM_README.md`](include/RTOS_PSRAM_README.md)
+- [`include/rtos/psram.md`](include/rtos/psram.md)
+- [`include/rtos/memory.md`](include/rtos/memory.md): `rtos::memory::heap_stats(Region)`
 - [`RTOS_SPI.md`](RTOS_SPI.md)
 - [`I2C.md`](I2C.md)
 - [`include/statistics/MinMaxAvg.md`](include/statistics/MinMaxAvg.md)

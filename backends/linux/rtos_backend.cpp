@@ -8,7 +8,15 @@
 #include "rtos/backend.hpp"
 #include "rtos/Log.hpp"
 #include "rtos/LogSinks.hpp"
+#include "rtos/memory.hpp"
 #include "rtos/psram.hpp"
+
+#if defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 33))
+#include <malloc.h>
+#define RTOS_HOST_HAS_MALLINFO2 1
+#else
+#define RTOS_HOST_HAS_MALLINFO2 0
+#endif
 
 namespace
 {
@@ -74,6 +82,21 @@ std::size_t psram_allocated_size(void *ptr)
 	if (!ptr)
 		return 0;
 	return *reinterpret_cast<std::size_t *>(static_cast<char *>(ptr) - sizeof(std::size_t));
+}
+
+// The host has one heap and no PSRAM: Internal, Any and Dma all describe the
+// process heap, External is zeros. glibc reports free bytes through mallinfo2();
+// other C libraries report nothing, which the API documents as zeros.
+HeapStats heap_stats(Region region)
+{
+	HeapStats stats;
+	if (region == Region::External)
+		return stats;
+#if RTOS_HOST_HAS_MALLINFO2
+	const struct mallinfo2 info = mallinfo2();
+	stats.free_bytes = info.fordblks;
+#endif
+	return stats;
 }
 
 }

@@ -7,10 +7,22 @@
 
 #include <zephyr/dfu/mcuboot.h>
 #include <zephyr/kernel.h>
+#include <zephyr/sys/sys_heap.h>
+
+// The kernel system heap: defined in C by Zephyr's kernel/mempool.c, so the
+// stub gives it C linkage as well.
+extern "C"
+{
+    k_heap _system_heap{{}, 4096};
+}
+extern k_heap rtos_psram_heap; // K_HEAP_DEFINE in rtos_psram.cpp
 
 namespace
 {
 std::unordered_map<void*, std::size_t> allocations;
+std::size_t peakAllocated = 0;
+sys_memory_stats systemHeapStats{4096, 0, 0};
+int heapStatsResult = 0;
 bool usedBlockingTimeout = false;
 mcuboot_img_sem_ver imageVersion{2, 3, 4, 5};
 uint8_t imageAreaId = 0;
@@ -36,7 +48,10 @@ void* k_heap_alloc(k_heap* heap, std::size_t bytes, k_timeout_t timeout)
         return nullptr;
     void* pointer = std::malloc(bytes);
     if (pointer != nullptr)
+    {
         allocations[pointer] = bytes;
+        peakAllocated = std::max(peakAllocated, bytesAllocated());
+    }
     return pointer;
 }
 
@@ -61,6 +76,7 @@ void* k_heap_realloc(
         return nullptr;
     allocations.erase(found);
     allocations[resized] = bytes;
+    peakAllocated = std::max(peakAllocated, bytesAllocated());
     return resized;
 }
 
@@ -79,6 +95,21 @@ std::size_t sys_heap_usable_size(sys_heap*, void* pointer)
 {
     const auto found = allocations.find(pointer);
     return found == allocations.end() ? 0 : found->second;
+}
+
+int sys_heap_runtime_stats_get(sys_heap* heap, sys_memory_stats* stats)
+{
+    if (heapStatsResult != 0)
+        return heapStatsResult;
+    if (heap == &rtos_psram_heap.heap)
+    {
+        stats->allocated_bytes = bytesAllocated();
+        stats->free_bytes = rtos_psram_heap.capacity - stats->allocated_bytes;
+        stats->max_allocated_bytes = peakAllocated;
+        return 0;
+    }
+    *stats = systemHeapStats;
+    return 0;
 }
 
 int boot_read_bank_header(
@@ -114,7 +145,21 @@ void resetMemory()
         std::free(pointer);
     }
     allocations.clear();
+    peakAllocated = 0;
+    systemHeapStats = {4096, 0, 0};
+    heapStatsResult = 0;
     usedBlockingTimeout = false;
+}
+
+void setSystemHeapStats(
+    std::size_t freeBytes, std::size_t allocatedBytes, std::size_t maxAllocatedBytes)
+{
+    systemHeapStats = {freeBytes, allocatedBytes, maxAllocatedBytes};
+}
+
+void setHeapStatsResult(int result)
+{
+    heapStatsResult = result;
 }
 
 std::size_t allocatedBytes()

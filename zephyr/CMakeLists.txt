@@ -13,6 +13,7 @@ foreach(config IN ITEMS
     CONFIG_RTOS_GPIO
     CONFIG_RTOS_WATCHDOG
     CONFIG_RTOS_PSRAM
+    CONFIG_RTOS_HEAP_STATS
     CONFIG_RTOS_APP_INFO
     CONFIG_RTOS_SYSTEM
 )
@@ -78,6 +79,10 @@ zephyr_library_sources_ifdef(CONFIG_RTOS_WATCHDOG
 
 zephyr_library_sources_ifdef(CONFIG_RTOS_PSRAM
     ../backends/zephyr/rtos_psram.cpp
+)
+
+zephyr_library_sources_ifdef(CONFIG_RTOS_HEAP_STATS
+    ../backends/zephyr/rtos_memory.cpp
 )
 
 zephyr_library_sources_ifdef(CONFIG_RTOS_APP_INFO

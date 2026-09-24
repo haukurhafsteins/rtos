@@ -11,6 +11,7 @@
 #include "rtos/LogSinks.hpp"
 #include "rtos/Gpio.hpp"
 #include "rtos/AppInfo.hpp"
+#include "rtos/memory.hpp"
 
 extern "C"
 {
@@ -990,6 +991,45 @@ namespace rtos::memory
 
     void psram_shutdown(void *notUsed)
     {
+    }
+}
+
+namespace rtos::memory
+{
+    //-----------------------------------------------------------------------------
+    // Heap statistics by region for ESP-IDF
+    //-----------------------------------------------------------------------------
+    namespace
+    {
+        uint32_t caps_for(Region region)
+        {
+            switch (region)
+            {
+            case Region::Internal:
+                return MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+            case Region::External:
+                return MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
+            case Region::Dma:
+                return MALLOC_CAP_DMA;
+            case Region::Any:
+            default:
+                return MALLOC_CAP_DEFAULT;
+            }
+        }
+    }
+
+    // heap_caps_get_free_size(), heap_caps_get_largest_free_block() and
+    // heap_caps_get_minimum_free_size() are each a heap_caps_get_info() walk that
+    // returns one field, so one walk here yields the same three numbers at once.
+    HeapStats heap_stats(Region region)
+    {
+        multi_heap_info_t info{};
+        heap_caps_get_info(&info, caps_for(region));
+        HeapStats stats;
+        stats.free_bytes = info.total_free_bytes;
+        stats.largest_free_block = info.largest_free_block;
+        stats.minimum_free_bytes = info.minimum_free_bytes;
+        return stats;
     }
 }
 

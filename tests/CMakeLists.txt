@@ -87,6 +87,7 @@ target_include_directories(rtos_host_support
 add_executable(rtos_host_tests
     final_log_output_test.cpp
     log_test.cpp
+    memory_stats_test.cpp
     nvs_test.cpp
     ring_buffer_test.cpp
     system_test.cpp
@@ -271,6 +272,7 @@ add_executable(rtos_zephyr_memory_appinfo_tests
     zephyr_memory_appinfo_stubs.cpp
     zephyr_memory_appinfo_test.cpp
     ../backends/zephyr/rtos_psram.cpp
+    ../backends/zephyr/rtos_memory.cpp
     ../backends/zephyr/rtos_app_info.cpp
 )
 

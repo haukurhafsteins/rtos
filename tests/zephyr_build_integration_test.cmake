@@ -48,6 +48,7 @@ set(RTOS_FEATURES
     RTOS_GPIO
     RTOS_WATCHDOG
     RTOS_PSRAM
+    RTOS_HEAP_STATS
     RTOS_APP_INFO
     RTOS_SYSTEM
 )
@@ -80,6 +81,7 @@ set(expected_sources
     ../backends/zephyr/rtos_backend.cpp
     ../backends/zephyr/rtos_watchdog.cpp
     ../backends/zephyr/rtos_psram.cpp
+    ../backends/zephyr/rtos_memory.cpp
     ../backends/zephyr/rtos_app_info.cpp
     ../backends/zephyr/rtos_system.cpp
 )

@@ -111,6 +111,14 @@ config RTOS_PSRAM_HEAP_SIZE
 	  Reserve this many bytes for the psram_* compatibility heap. Set the
 	  value from a measured application allocation budget.
 
+config RTOS_HEAP_STATS
+	bool "Heap statistics backend"
+	depends on MULTITHREADING && SYS_HEAP_RUNTIME_STATS && HEAP_MEM_POOL_SIZE > 0
+	help
+	  Build rtos::memory::heap_stats() over sys_heap_runtime_stats_get() on the
+	  kernel system heap and, when RTOS_PSRAM is enabled, on the psram_*
+	  compatibility heap.
+
 config RTOS_APP_INFO
 	bool "Application and chip information backend"
 	depends on HWINFO && FLASH_MAP && MCUBOOT_IMG_MANAGER
