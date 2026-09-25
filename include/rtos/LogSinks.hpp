@@ -13,10 +13,14 @@ namespace rtos
         void* _stream; // FILE* but kept as void* to avoid <cstdio> in header
     };
 
-    // For ESP-IDF (FreeRTOS on ESP32). Compiles only if ESP_PLATFORM is defined.
+    // For ESP-IDF (FreeRTOS on ESP32). Prints the native "L (ms) tag: body" line through the
+    // same macro path as ESP_LOGx, once, with ESP-IDF's compile-time and per-tag levels applied.
+    // On espidf the backend emits directly only while no sink is registered, so registering this
+    // sink replaces, not duplicates, the console output (HMO-86).
     class EspIdfLogSink final : public ILogSink
     {
     public:
+        void writeRecord(const LogRecord& record) override;
         void write(LogLevel level, const char* tag, const char* line, size_t len) override;
     };
 

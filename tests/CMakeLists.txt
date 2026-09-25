@@ -315,3 +315,23 @@ else()
 endif()
 
 gtest_discover_tests(rtos_zephyr_memory_appinfo_tests)
+
+add_executable(rtos_espidf_log_sink_tests
+    espidf_log_sink_test.cpp
+    ../backends/espidf/rtos_log_sink.cpp
+)
+
+target_link_libraries(rtos_espidf_log_sink_tests PRIVATE GTest::gtest_main)
+target_include_directories(rtos_espidf_log_sink_tests
+    PRIVATE
+        ../include
+        stubs_log_espidf
+)
+
+if(MSVC)
+    target_compile_options(rtos_espidf_log_sink_tests PRIVATE /W4)
+else()
+    target_compile_options(rtos_espidf_log_sink_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+gtest_discover_tests(rtos_espidf_log_sink_tests)
