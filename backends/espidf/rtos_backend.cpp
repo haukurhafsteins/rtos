@@ -527,32 +527,47 @@ void Log::vlog(LogLevel level, const char *tag, const char *fmt, va_list ap)
     }
 
     body[sizeof(body) - 1] = '\0';
+    const size_t bodyLength =
+        n < static_cast<int>(sizeof(body)) ? static_cast<size_t>(n) : sizeof(body) - 1;
+    const char *resolvedTag = tag ? tag : "rtos";
 
-    switch (level)
+    // Snapshot the registry under the lock, then decide from the snapshot: a line goes either
+    // straight to esp_log or to the sinks, never both, whatever addSink()/clearSinks() do
+    // concurrently. Registering an EspIdfLogSink used to print every line twice (HMO-86).
+    std::array<ILogSink *, RTOS_LOG_MAX_SINKS> sinks{};
+    size_t sinkCount = 0;
+    lock();
+    sinkCount = s_sinkCount;
+    std::copy_n(s_sinks, sinkCount, sinks.begin());
+    unlock();
+
+    // Direct emission only when no sink is registered, or when a sink logs from inside its own
+    // write() and the sinks cannot be re-entered; the nested line is then still printed once.
+    if (sinkCount == 0 || s_inSinkDispatch)
     {
-    case rtos::LogLevel::Error:
-        ESP_LOGE(tag, "%s", body);
-        break;
-    case rtos::LogLevel::Warn:
-        ESP_LOGW(tag, "%s", body);
-        break;
-    case rtos::LogLevel::Info:
-        ESP_LOGI(tag, "%s", body);
-        break;
-    case rtos::LogLevel::Debug:
-        ESP_LOGD(tag, "%s", body);
-        break;
-    case rtos::LogLevel::Verbose:
-        ESP_LOGV(tag, "%s", body);
-        break;
-    default:
-        break;
+        switch (level)
+        {
+        case rtos::LogLevel::Error:
+            ESP_LOGE(resolvedTag, "%s", body);
+            break;
+        case rtos::LogLevel::Warn:
+            ESP_LOGW(resolvedTag, "%s", body);
+            break;
+        case rtos::LogLevel::Info:
+            ESP_LOGI(resolvedTag, "%s", body);
+            break;
+        case rtos::LogLevel::Debug:
+            ESP_LOGD(resolvedTag, "%s", body);
+            break;
+        case rtos::LogLevel::Verbose:
+            ESP_LOGV(resolvedTag, "%s", body);
+            break;
+        default:
+            break;
+        }
+        return;
     }
 
-    if (s_inSinkDispatch)
-        return;
-
-    const char *resolvedTag = tag ? tag : "rtos";
     char line[RTOS_LOG_LINE_MAX];
 #if RTOS_LOG_SHOW_TIME
     const auto timestamp = s_ts ? s_ts() : rtos::time::now_ms().count();
@@ -573,19 +588,14 @@ void Log::vlog(LogLevel level, const char *tag, const char *fmt, va_list ap)
             ? static_cast<size_t>(lineLength)
             : sizeof(line) - 1;
 
-    std::array<ILogSink *, RTOS_LOG_MAX_SINKS> sinks{};
-    size_t sinkCount = 0;
-    lock();
-    sinkCount = s_sinkCount;
-    std::copy_n(s_sinks, sinkCount, sinks.begin());
-    unlock();
+    const LogRecord record{level, resolvedTag, body, bodyLength, line, emittedLength};
 
     SinkDispatchGuard dispatchGuard;
     for (size_t i = 0; i < sinkCount; ++i)
     {
         auto *sink = sinks[i];
         if (sink && sink->enabled(level))
-            sink->write(level, resolvedTag, line, emittedLength);
+            sink->writeRecord(record);
     }
 }
 
@@ -606,29 +616,7 @@ void StdoutLogSink::write(LogLevel, const char *, const char *line, size_t)
     std::fputc('\n', (FILE *)(_stream ? _stream : stdout));
 }
 
-void EspIdfLogSink::write(LogLevel level, const char *tag, const char *msg, size_t)
-{
-    switch (level)
-    {
-    case rtos::LogLevel::Error:
-        ESP_LOGE(tag, "%s", msg);
-        break;
-    case rtos::LogLevel::Warn:
-        ESP_LOGW(tag, "%s", msg);
-        break;
-    case rtos::LogLevel::Info:
-        ESP_LOGI(tag, "%s", msg);
-        break;
-    case rtos::LogLevel::Debug:
-        ESP_LOGD(tag, "%s", msg);
-        break;
-    case rtos::LogLevel::Verbose:
-        ESP_LOGV(tag, "%s", msg);
-        break;
-    default:
-        break;
-    }
-}
+// EspIdfLogSink lives in rtos_log_sink.cpp so it can be host-tested against a stub esp_log.h.
 
 //-----------------------------------------------------------------------------
 // GPIO implementation for ESP-IDF

@@ -159,6 +159,13 @@ add_test(
     COMMAND rtos_cpp20_header_compatibility_test
 )
 
+add_executable(rtos_timeout_argument_test timeout_argument_test.cpp)
+target_include_directories(rtos_timeout_argument_test PRIVATE ../include)
+add_test(
+    NAME TimeoutArgumentTest.DefaultAndExplicitCalls
+    COMMAND rtos_timeout_argument_test
+)
+
 add_executable(rtos_msg_buffer_task_header_compile_test
     msg_buffer_task_header_compile_test.cpp
 )
@@ -315,3 +322,23 @@ else()
 endif()
 
 gtest_discover_tests(rtos_zephyr_memory_appinfo_tests)
+
+add_executable(rtos_espidf_log_sink_tests
+    espidf_log_sink_test.cpp
+    ../backends/espidf/rtos_log_sink.cpp
+)
+
+target_link_libraries(rtos_espidf_log_sink_tests PRIVATE GTest::gtest_main)
+target_include_directories(rtos_espidf_log_sink_tests
+    PRIVATE
+        ../include
+        stubs_log_espidf
+)
+
+if(MSVC)
+    target_compile_options(rtos_espidf_log_sink_tests PRIVATE /W4)
+else()
+    target_compile_options(rtos_espidf_log_sink_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+gtest_discover_tests(rtos_espidf_log_sink_tests)

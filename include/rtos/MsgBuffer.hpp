@@ -59,17 +59,17 @@ public:
 
     // Typed convenience (trivially copyable payloads only)
     template <typename T>
-    bool send_obj(const T& obj, uint32_t timeout_ms = backend::WAIT_FOREVER) noexcept {
+    bool send_obj(const T& obj, uint32_t timeout_ms = static_cast<uint32_t>(backend::WAIT_FOREVER.count())) noexcept {
         static_assert(std::is_trivially_copyable<T>::value,
                       "send_obj requires trivially copyable T");
-        return send_all(&obj, sizeof(T), timeout_ms);
+        return send_all(&obj, sizeof(T), typed_timeout(timeout_ms));
     }
 
     template <typename T>
-    bool receive_obj(T& out, uint32_t timeout_ms = backend::WAIT_FOREVER) noexcept {
+    bool receive_obj(T& out, uint32_t timeout_ms = static_cast<uint32_t>(backend::WAIT_FOREVER.count())) noexcept {
         static_assert(std::is_trivially_copyable<T>::value,
                       "receive_obj requires trivially copyable T");
-        return receive(&out, sizeof(T), timeout_ms) == sizeof(T);
+        return receive(&out, sizeof(T), typed_timeout(timeout_ms)) == sizeof(T);
     }
 
     // ISR variants (no mutex — must be called from ISR context only)
@@ -87,6 +87,12 @@ public:
     bool reset() noexcept { return backend::msgbuf_reset(_handle); }
 
 private:
+    static constexpr Millis typed_timeout(uint32_t timeout_ms) noexcept {
+        // Preserve the integer API's forever sentinel at the chrono boundary.
+        return timeout_ms == static_cast<uint32_t>(backend::WAIT_FOREVER.count())
+            ? backend::WAIT_FOREVER : Millis{timeout_ms};
+    }
+
     void close() noexcept {
         if (_handle) {
             backend::msgbuf_delete(_handle);

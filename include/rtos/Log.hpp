@@ -55,11 +55,32 @@ namespace rtos
         Verbose = RTOS_LOG_LEVEL_VERBOSE,
     };
 
+    // One log call as the backend hands it to sinks. `body` is the caller's message after
+    // printf formatting and nothing else; `line` is the rtos-formatted "[ts] L/tag: body"
+    // (or "L/tag: body" without RTOS_LOG_SHOW_TIME). Both are NUL-terminated.
+    struct LogRecord
+    {
+        LogLevel level;
+        const char* tag;      // resolved: never null, "rtos" when the caller passed none
+        const char* body;
+        size_t bodyLen;
+        const char* line;
+        size_t lineLen;
+    };
+
     struct ILogSink
     {
         virtual ~ILogSink() = default;
         virtual bool enabled(LogLevel) { return true; }
+        // The formatted line, for sinks that print it verbatim (stdout, printk, files).
         virtual void write(LogLevel level, const char* tag, const char* line, size_t len) = 0;
+        // What the backend actually calls. Override this when the sink needs the bare body,
+        // e.g. to hand it to a platform logger that adds its own prefix (EspIdfLogSink, HMO-86).
+        // The default keeps every existing sink unchanged.
+        virtual void writeRecord(const LogRecord& record)
+        {
+            write(record.level, record.tag, record.line, record.lineLen);
+        }
     };
 
     class Log

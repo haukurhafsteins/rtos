@@ -43,7 +43,7 @@ public:
         return backend::queue_send(_handle, &msg, timeout_ms);
     }
 
-    bool receive(T& msg, uint32_t timeout_ms = backend::WAIT_FOREVER) noexcept {
+    bool receive(T& msg, uint32_t timeout_ms = static_cast<uint32_t>(backend::WAIT_FOREVER.count())) noexcept {
         return backend::queue_receive(_handle, &msg, timeout_ms);
     }
 

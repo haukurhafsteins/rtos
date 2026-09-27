@@ -160,6 +160,9 @@ void Log::vlog(LogLevel level, const char *tag, const char *format, va_list args
     const auto emittedLength = lineLength < static_cast<int>(sizeof(line))
         ? static_cast<std::size_t>(lineLength)
         : sizeof(line) - 1;
+    const auto bodyLength = formatted < static_cast<int>(sizeof(body))
+        ? static_cast<std::size_t>(formatted)
+        : sizeof(body) - 1;
 
     std::array<ILogSink *, RTOS_LOG_MAX_SINKS> sinks{};
     lock();
@@ -167,12 +170,14 @@ void Log::vlog(LogLevel level, const char *tag, const char *format, va_list args
     std::copy_n(s_sinks, sinkCount, sinks.begin());
     unlock();
 
+    const LogRecord record{level, resolvedTag, body, bodyLength, line, emittedLength};
+
     SinkDispatchGuard guard;
     for (std::size_t index = 0; index < sinkCount; ++index)
     {
         auto *sink = sinks[index];
         if (sink && sink->enabled(level))
-            sink->write(level, resolvedTag, line, emittedLength);
+            sink->writeRecord(record);
     }
 }
 
