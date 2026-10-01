@@ -136,13 +136,20 @@ public:
 
     void print(const char *prefix = nullptr) const
     {
-        std::lock_guard<std::mutex> lk(subs_mtx_);
+        // Snapshot, then print with the lock released. subs_mtx_ is shared by every topic now, so
+        // holding it across a console write would stall every publisher on the device, not just
+        // this topic's.
+        std::vector<Sub> snapshot;
+        {
+            std::lock_guard<std::mutex> lk(subs_mtx_);
+            snapshot = subscribers_;
+        }
         if (prefix)
         {
             printf("%s", prefix);
         }
-        printf("Topic %s (id: %lu) has %zu subscribers:\n", _name.data(), topicId, subscribers_.size());
-        for (const auto &s : subscribers_)
+        printf("Topic %s (id: %lu) has %zu subscribers:\n", _name.data(), topicId, snapshot.size());
+        for (const auto &s : snapshot)
         {
             printf("  Subscriber queue: %p, topicId: %lu\n", s.q, s.id);
         }
@@ -155,7 +162,23 @@ protected:
         uint32_t id;
     };
     std::vector<Sub> subscribers_;
-    mutable std::mutex subs_mtx_;
+
+    /// ONE lock for every topic's subscriber list, not one per topic. A std::mutex is backed on
+    /// ESP-IDF by xQueueCreateMutex (newlib locks.c), and FreeRTOS objects come from on-chip RAM
+    /// with no Kconfig escape - so a per-topic mutex cost 132 B of on-chip RAM each, measured, or
+    /// ~38 KB across the 288 topics of a shipped meter. That is what left the last task to start
+    /// without a contiguous stack block (HMO-109).
+    ///
+    /// Sharing one lock is safe because nothing holds it for long: every critical section is a
+    /// vector operation over a handful of 8-byte entries, and notify() deliberately copies the
+    /// list and releases the lock BEFORE it sends to anyone. The sends - the only slow part - were
+    /// always outside it.
+    ///
+    /// A non-blocking spinlock would be cheaper still but cannot be used here: it would disable
+    /// interrupts around a push_back that allocates and a print() that calls printf, and ESP-IDF's
+    /// allocator takes its own spinlock. A blocking mutex is the right primitive; there just only
+    /// needs to be one of it.
+    inline static std::mutex subs_mtx_;
     const std::string_view _name;
     Metrics::Unit topicUnit;
     TopicId topicId;
