@@ -160,8 +160,11 @@ bool validPayload(const void *data, std::size_t bytes)
 namespace rtos::backend
 {
 bool msgbuf_create(
-    MsgBufferHandle &outHandle, std::size_t capacityBytes) noexcept
+    MsgBufferHandle &outHandle, std::size_t capacityBytes, memory::Region placement) noexcept
 {
+    // Zephyr's k_malloc draws from a single system heap here, so placement has nothing to
+    // choose between. Accepted and ignored so portable callers can still state their intent.
+    (void)placement;
     outHandle = nullptr;
     if (capacityBytes <= LENGTH_PREFIX_BYTES)
         return false;

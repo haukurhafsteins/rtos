@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstddef>
 #include "rtos/time.hpp"
+#include "rtos/memory.hpp"
 
 namespace rtos
 {
@@ -47,7 +48,14 @@ namespace rtos::backend
 
     // ===== Message buffer backend (new) =====
     using MsgBufferHandle = void *;
-    bool msgbuf_create(MsgBufferHandle &out_handle, std::size_t capacity_bytes) noexcept;
+    // placement picks the heap the buffer's storage comes from. Default Any = whatever plain
+    // malloc() draws from, which is what every caller got before the parameter existed. Pass
+    // External for a large buffer that only ever moves between tasks: on a target with off-chip
+    // RAM that keeps tens of KB of scarce on-chip RAM free. A buffer touched by send_isr/
+    // receive_isr MUST stay Internal - an ISR may run with the flash cache disabled, and
+    // off-chip RAM is unreachable then.
+    bool msgbuf_create(MsgBufferHandle &out_handle, std::size_t capacity_bytes,
+                       memory::Region placement = memory::Region::Any) noexcept;
     void msgbuf_delete(MsgBufferHandle handle) noexcept;
     std::size_t msgbuf_send(MsgBufferHandle handle, const void *data, std::size_t bytes, Millis timeout_ms) noexcept;
     std::size_t msgbuf_receive(MsgBufferHandle handle, void *out, std::size_t max_bytes, Millis timeout_ms) noexcept;

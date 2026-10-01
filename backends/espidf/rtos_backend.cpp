@@ -49,6 +49,21 @@ namespace
 
     constexpr UBaseType_t task_stack_caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
 
+    // Region -> heap caps for a message buffer's storage. Any keeps the historical
+    // MALLOC_CAP_DEFAULT, which the allocator satisfies from on-chip DRAM first and only
+    // spills to PSRAM. External is the deliberate opposite: spend PSRAM, not DRAM.
+    constexpr UBaseType_t msgbuf_caps(rtos::memory::Region placement)
+    {
+        switch (placement)
+        {
+        case rtos::memory::Region::Internal: return MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+        case rtos::memory::Region::External: return MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
+        case rtos::memory::Region::Dma:      return MALLOC_CAP_DMA;
+        case rtos::memory::Region::Any:      break;
+        }
+        return MALLOC_CAP_DEFAULT;
+    }
+
 } // namespace
 
 namespace rtos::backend
@@ -220,9 +235,10 @@ namespace rtos::backend
     //-----------------------------------------------------------------------------
     // Message Buffer
     //-----------------------------------------------------------------------------
-    bool msgbuf_create(MsgBufferHandle &out_handle, std::size_t capacity_bytes) noexcept
+    bool msgbuf_create(MsgBufferHandle &out_handle, std::size_t capacity_bytes,
+                       memory::Region placement) noexcept
     {
-        MessageBufferHandle_t h = xMessageBufferCreateWithCaps(capacity_bytes, MALLOC_CAP_DEFAULT);
+        MessageBufferHandle_t h = xMessageBufferCreateWithCaps(capacity_bytes, msgbuf_caps(placement));
         if (!h)
         {
             out_handle = nullptr;

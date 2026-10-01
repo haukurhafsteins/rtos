@@ -20,8 +20,12 @@ template <size_t MaxMsgSize>
 class MsgBufferTask : public IMsgReceiver
 {
 public:
-    MsgBufferTask(const char *name, uint32_t stack_bytes, uint32_t prio, std::size_t buf_cap)
-        : _msgQueue(buf_cap),
+    /// placement picks the heap the inbox comes from. The task stack is always on-chip;
+    /// only the queue storage moves. Leave it at Any unless the inbox is large and is never
+    /// written from an ISR - see backend::msgbuf_create.
+    MsgBufferTask(const char *name, uint32_t stack_bytes, uint32_t prio, std::size_t buf_cap,
+                  memory::Region placement = memory::Region::Any)
+        : _msgQueue(buf_cap, placement),
           _task(name, stack_bytes, prio, &MsgBufferTask::TaskEntry, this)
     {
         _receiveTimeoutMs = backend::WAIT_FOREVER;

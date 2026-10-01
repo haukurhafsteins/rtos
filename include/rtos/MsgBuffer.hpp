@@ -11,11 +11,14 @@ namespace rtos
 
 class MsgBuffer {
 public:
-    explicit MsgBuffer(std::size_t capacity_bytes) noexcept
+    /// placement picks the heap the storage comes from; see backend::msgbuf_create.
+    /// Keep the default (Any) for anything send_isr/receive_isr may touch.
+    explicit MsgBuffer(std::size_t capacity_bytes,
+                       memory::Region placement = memory::Region::Any) noexcept
         : _handle(nullptr), _capacity(capacity_bytes)
     {
-        bool ok = backend::msgbuf_create(_handle, capacity_bytes);
-        assert(ok && "msgbuf_create failed — not enough internal RAM");
+        bool ok = backend::msgbuf_create(_handle, capacity_bytes, placement);
+        assert(ok && "msgbuf_create failed — not enough RAM in the requested region");
     }
 
     ~MsgBuffer() { close(); }
