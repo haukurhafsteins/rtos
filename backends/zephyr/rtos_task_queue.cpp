@@ -1,5 +1,6 @@
 #include "rtos/backend.hpp"
 #include "rtos/Log.hpp"
+#include "rtos/ZephyrDiagnostics.hpp"
 
 #include <cstdint>
 #include <limits>
@@ -38,6 +39,9 @@ struct TaskSlot
     void *argument = nullptr;
     bool occupied = false;
     bool usedBefore = false;
+#if defined(CONFIG_RTOS_DIAGNOSTICS)
+    bool readyForSnapshot = false;
+#endif
 };
 
 #if CONFIG_RTOS_TASK_STACK_SMALL_SLOTS > 0
@@ -142,6 +146,9 @@ void releaseTaskSlot(TaskSlot &slot)
     slot.function = nullptr;
     slot.argument = nullptr;
     slot.occupied = false;
+#if defined(CONFIG_RTOS_DIAGNOSTICS)
+    slot.readyForSnapshot = false;
+#endif
     k_spin_unlock(&s_taskTableLock, key);
 }
 
@@ -213,6 +220,38 @@ k_msgq *nativeQueue(rtos::backend::QueueHandle handle)
 }
 }
 
+#if defined(CONFIG_RTOS_DIAGNOSTICS)
+namespace rtos::zephyr_diagnostics {
+std::size_t task_slot_count() noexcept { return SMALL_STACK_SLOTS + LARGE_STACK_SLOTS; }
+bool task_stack_snapshot(std::size_t index, StackSnapshot &snapshot) noexcept
+{
+    snapshot = {};
+    if (index >= task_slot_count()) return false;
+    // Single CPU: no task can create/delete/reuse a slot during the scan.
+    // Interrupts stay enabled for the potentially long stack-fill scan.
+    k_sched_lock();
+    TaskSlot *slot = nullptr;
+#if CONFIG_RTOS_TASK_STACK_SMALL_SLOTS > 0
+    if (index < SMALL_STACK_SLOTS) slot = &s_smallTaskSlots[index];
+#endif
+#if CONFIG_RTOS_TASK_STACK_LARGE_SLOTS > 0
+    if (!slot) slot = &s_largeTaskSlots[index - SMALL_STACK_SLOTS];
+#endif
+    const auto key = k_spin_lock(&s_taskTableLock);
+    snapshot.active = slot && slot->occupied && slot->readyForSnapshot;
+    k_spin_unlock(&s_taskTableLock, key);
+    if (snapshot.active) {
+        snapshot.error = k_thread_stack_space_get(&slot->thread, &snapshot.minimumFreeBytes);
+        const char *name = k_thread_name_get(&slot->thread);
+        if (name) for (std::size_t i = 0; i + 1 < sizeof(snapshot.name) && name[i]; ++i)
+            snapshot.name[i] = name[i];
+    }
+    k_sched_unlock();
+    return true;
+}
+}
+#endif
+
 namespace rtos::backend
 {
 bool task_create(
@@ -241,6 +280,7 @@ bool task_create(
     auto *slot = reservation.slot;
     if (!slot)
     {
+        zephyr_diagnostics::record_failure(zephyr_diagnostics::Failure::TaskSlot);
         RTOS_LOGE(
             "rtos.task",
             "task '%s' requested %u stack bytes; available slots: small %u/%u (%u bytes), large %u/%u (%u bytes)",
@@ -257,6 +297,7 @@ bool task_create(
 
     if (slot->usedBefore && k_thread_join(&slot->thread, K_FOREVER) != 0)
     {
+        zephyr_diagnostics::record_failure(zephyr_diagnostics::Failure::TaskCreate);
         releaseTaskSlot(*slot);
         return false;
     }
@@ -279,6 +320,7 @@ bool task_create(
         K_NO_WAIT);
     if (!thread)
     {
+        zephyr_diagnostics::record_failure(zephyr_diagnostics::Failure::TaskCreate);
         slot->usedBefore = false;
         releaseTaskSlot(*slot);
         return false;
@@ -286,6 +328,12 @@ bool task_create(
 
     if (name)
         (void)k_thread_name_set(thread, name);
+#if defined(CONFIG_RTOS_DIAGNOSTICS)
+    const auto key = k_spin_lock(&s_taskTableLock);
+    // A K_NO_WAIT task may already have returned and released the slot.
+    slot->readyForSnapshot = slot->occupied;
+    k_spin_unlock(&s_taskTableLock, key);
+#endif
     outHandle = static_cast<TaskHandle>(thread);
     return true;
 }
@@ -355,11 +403,14 @@ bool queue_create(
     }
 
     auto *queue = static_cast<k_msgq *>(k_malloc(sizeof(k_msgq)));
-    if (!queue)
+    if (!queue) {
+        zephyr_diagnostics::record_failure(zephyr_diagnostics::Failure::Queue);
         return false;
+    }
 
     if (k_msgq_alloc_init(queue, itemSize, static_cast<std::uint32_t>(length)) != 0)
     {
+        zephyr_diagnostics::record_failure(zephyr_diagnostics::Failure::Queue);
         k_free(queue);
         return false;
     }
@@ -436,8 +487,10 @@ std::size_t queue_spaces(QueueHandle handle) noexcept
 bool queue_reset(QueueHandle handle) noexcept
 {
     auto *queue = nativeQueue(handle);
-    if (!queue)
+    if (!queue) {
+        zephyr_diagnostics::record_failure(zephyr_diagnostics::Failure::Queue);
         return false;
+    }
     k_msgq_purge(queue);
     return true;
 }

@@ -13,6 +13,8 @@
 #include <gtest/gtest.h>
 
 #include "rtos/Log.hpp"
+#include "rtos/Queue.hpp"
+#include "rtos/ZephyrDiagnostics.hpp"
 #include "rtos/backend.hpp"
 #include "zephyr/kernel.h"
 
@@ -632,3 +634,54 @@ TEST_F(ZephyrTaskQueueTest, QueueCreationValidatesShapeAndAllocation)
     EXPECT_FALSE(rtos::backend::queue_create(handle, 1, sizeof(std::uint32_t)));
     EXPECT_EQ(handle, nullptr);
 }
+
+TEST_F(ZephyrTaskQueueTest, QueueValidityExposesAllocationFailureAndMoveOwnership)
+{
+    s_failQueueInit = true;
+    rtos::Queue<int> failed(4);
+    EXPECT_FALSE(failed.valid());
+    s_failQueueInit = false;
+    rtos::Queue<int> good(4);
+    ASSERT_TRUE(good.valid());
+    rtos::Queue<int> moved(std::move(good));
+    EXPECT_TRUE(moved.valid());
+    EXPECT_FALSE(good.valid());
+}
+
+TEST_F(ZephyrTaskQueueTest, DiagnosticsReportActiveSlotsAndRelease)
+{
+    using namespace rtos::zephyr_diagnostics;
+    StackSnapshot snapshot;
+    EXPECT_EQ(task_slot_count(), 4u);
+    EXPECT_FALSE(task_stack_snapshot(4, snapshot));
+    ASSERT_TRUE(task_stack_snapshot(0, snapshot));
+    EXPECT_FALSE(snapshot.active);
+    rtos::backend::TaskHandle task = nullptr;
+    ASSERT_TRUE(rtos::backend::task_create(task, "devLogTx", 4096, 1, userTask, nullptr));
+    ASSERT_TRUE(task_stack_snapshot(0, snapshot));
+    EXPECT_TRUE(snapshot.active);
+    EXPECT_STREQ(snapshot.name, "devLogTx");
+    EXPECT_EQ(snapshot.minimumFreeBytes, 512u);
+    EXPECT_EQ(snapshot.error, 0);
+    rtos::backend::task_delete(task);
+    ASSERT_TRUE(task_stack_snapshot(0, snapshot));
+    EXPECT_FALSE(snapshot.active);
+}
+TEST_F(ZephyrTaskQueueTest, DiagnosticsCountFailedQueueOperationsOnce)
+{
+    using namespace rtos::zephyr_diagnostics;
+    begin();
+    const auto before = failures().counts[static_cast<unsigned>(Failure::Queue)];
+    s_failQueueInit = true;
+    rtos::Queue<int> failed(4);
+    EXPECT_FALSE(failed.valid());
+    EXPECT_EQ(failures().counts[static_cast<unsigned>(Failure::Queue)], before + 1);
+}
+
+extern "C" void k_sched_lock() {}
+extern "C" void k_sched_unlock() {}
+extern "C" const char *k_thread_name_get(k_tid_t thread) {
+    for (const auto &call : s_threadCreates) if (call.thread == thread) return call.name.c_str();
+    return nullptr;
+}
+extern "C" int k_thread_stack_space_get(k_tid_t, std::size_t *free) { *free = 512; return 0; }

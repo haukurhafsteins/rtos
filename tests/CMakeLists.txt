@@ -131,12 +131,14 @@ gtest_discover_tests(rtos_host_tests)
 add_executable(rtos_zephyr_task_queue_tests
     zephyr_task_queue_test.cpp
     ../backends/zephyr/rtos_task_queue.cpp
+    ../backends/zephyr/rtos_diagnostics.cpp
 )
 
 target_link_libraries(rtos_zephyr_task_queue_tests PRIVATE GTest::gtest_main)
 target_include_directories(rtos_zephyr_task_queue_tests PRIVATE ../include stubs_task)
 target_compile_definitions(rtos_zephyr_task_queue_tests
     PRIVATE
+        CONFIG_RTOS_DIAGNOSTICS=1
         CONFIG_RTOS_TASK_STACK_SMALL_BYTES=4096
         CONFIG_RTOS_TASK_STACK_SMALL_SLOTS=3
         CONFIG_RTOS_TASK_STACK_LARGE_BYTES=10240
@@ -316,10 +318,13 @@ gtest_discover_tests(rtos_espidf_gpio_pinmap_tests)
 add_executable(rtos_zephyr_memory_appinfo_tests
     zephyr_memory_appinfo_stubs.cpp
     zephyr_memory_appinfo_test.cpp
+    ../backends/zephyr/rtos_diagnostics.cpp
     ../backends/zephyr/rtos_psram.cpp
     ../backends/zephyr/rtos_memory.cpp
     ../backends/zephyr/rtos_app_info.cpp
 )
+
+target_compile_definitions(rtos_zephyr_memory_appinfo_tests PRIVATE CONFIG_RTOS_DIAGNOSTICS=1)
 
 target_link_libraries(rtos_zephyr_memory_appinfo_tests
     PRIVATE
@@ -359,3 +364,10 @@ else()
 endif()
 
 gtest_discover_tests(rtos_espidf_log_sink_tests)
+
+add_executable(rtos_zephyr_message_buffer_tests zephyr_message_buffer_test.cpp
+    ../backends/zephyr/rtos_message_buffer.cpp ../backends/zephyr/rtos_diagnostics.cpp)
+target_include_directories(rtos_zephyr_message_buffer_tests PRIVATE ../include stubs_task)
+target_compile_definitions(rtos_zephyr_message_buffer_tests PRIVATE CONFIG_RTOS_DIAGNOSTICS=1)
+target_link_libraries(rtos_zephyr_message_buffer_tests PRIVATE GTest::gtest_main)
+gtest_discover_tests(rtos_zephyr_message_buffer_tests)

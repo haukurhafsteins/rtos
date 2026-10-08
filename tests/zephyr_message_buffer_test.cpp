@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include "rtos/backend.hpp"
+#include "rtos/ZephyrDiagnostics.hpp"
 #include "zephyr/kernel.h"
 
 namespace
@@ -260,4 +261,18 @@ TEST_F(ZephyrMessageBufferTest, ValidatesCapacityLengthAndAllocation)
     handle = reinterpret_cast<void *>(0x1);
     EXPECT_FALSE(rtos::backend::msgbuf_create(handle, 8));
     EXPECT_EQ(handle, nullptr);
+}
+
+TEST_F(ZephyrMessageBufferTest, DiagnosticsCountEitherAllocationFailureOnce)
+{
+    using namespace rtos::zephyr_diagnostics;
+    begin();
+    const auto index = static_cast<unsigned>(Failure::MessageBuffer);
+    const auto before = failures().counts[index];
+    s_allocationsBeforeFailure = 0;
+    EXPECT_EQ(create(32), nullptr);
+    EXPECT_EQ(failures().counts[index], before + 1);
+    s_allocationsBeforeFailure = 1;
+    EXPECT_EQ(create(32), nullptr);
+    EXPECT_EQ(failures().counts[index], before + 2);
 }

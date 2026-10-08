@@ -60,6 +60,7 @@ public:
     }
 
     // Introspection / maintenance
+    bool valid() const noexcept { return _handle != nullptr; }
     std::size_t count() const noexcept { return backend::queue_count(_handle); }
     std::size_t spaces() const noexcept { return backend::queue_spaces(_handle); }
     std::size_t length() const noexcept { return _length; }

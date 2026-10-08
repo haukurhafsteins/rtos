@@ -119,6 +119,14 @@ config RTOS_HEAP_STATS
 	  kernel system heap and, when RTOS_PSRAM is enabled, on the psram_*
 	  compatibility heap.
 
+config RTOS_DIAGNOSTICS
+	bool "Application allocation failures and task stack snapshots"
+	depends on RTOS_TASK_QUEUE && THREAD_STACK_INFO && INIT_STACKS && THREAD_NAME && !SMP
+	help
+	  Opt-in diagnostics enabled explicitly by begin() from main. Count only
+	  RTOS-owned allocation boundaries, not third-party allocator failures.
+	  Snapshot existing task slots without creating another thread registry.
+
 config RTOS_APP_INFO
 	bool "Application and chip information backend"
 	depends on HWINFO && FLASH_MAP && MCUBOOT_IMG_MANAGER

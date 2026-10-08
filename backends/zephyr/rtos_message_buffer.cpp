@@ -1,4 +1,5 @@
 #include "rtos/backend.hpp"
+#include "rtos/ZephyrDiagnostics.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -167,13 +168,16 @@ bool msgbuf_create(
         return false;
 
     auto *memory = k_malloc(sizeof(MessageBufferState));
-    if (!memory)
+    if (!memory) {
+        zephyr_diagnostics::record_failure(zephyr_diagnostics::Failure::MessageBuffer);
         return false;
+    }
     auto *state = new (memory) MessageBufferState{};
 
     state->storage = static_cast<std::uint8_t *>(k_malloc(capacityBytes));
     if (!state->storage)
     {
+        zephyr_diagnostics::record_failure(zephyr_diagnostics::Failure::MessageBuffer);
         state->~MessageBufferState();
         k_free(state);
         return false;
