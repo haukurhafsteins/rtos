@@ -672,6 +672,8 @@ TEST_F(ZephyrTaskQueueTest, DiagnosticsCountFailedQueueOperationsOnce)
     using namespace rtos::zephyr_diagnostics;
     begin();
     const auto before = failures().counts[static_cast<unsigned>(Failure::Queue)];
+    EXPECT_FALSE(rtos::backend::queue_reset(nullptr));
+    EXPECT_EQ(failures().counts[static_cast<unsigned>(Failure::Queue)], before);
     s_failQueueInit = true;
     rtos::Queue<int> failed(4);
     EXPECT_FALSE(failed.valid());

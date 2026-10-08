@@ -487,10 +487,7 @@ std::size_t queue_spaces(QueueHandle handle) noexcept
 bool queue_reset(QueueHandle handle) noexcept
 {
     auto *queue = nativeQueue(handle);
-    if (!queue) {
-        zephyr_diagnostics::record_failure(zephyr_diagnostics::Failure::Queue);
-        return false;
-    }
+    if (!queue) return false;
     k_msgq_purge(queue);
     return true;
 }
