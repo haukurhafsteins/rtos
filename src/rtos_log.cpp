@@ -1,4 +1,7 @@
 #include "rtos/Log.hpp"
+#if defined(__ZEPHYR__)
+#include "rtos/FinalLogOutput.hpp"
+#endif
 
 #include <algorithm>
 #include <array>
@@ -179,6 +182,14 @@ void Log::vlog(LogLevel level, const char *tag, const char *format, va_list args
         if (sink && sink->enabled(level))
             sink->writeRecord(record);
     }
+#if defined(__ZEPHYR__)
+    // Reuse the formatter's buffer and recursion guard. printk may bypass the
+    // console hook, and its character callbacks never preserve record bounds.
+    detail::dispatchFinalLogLine(
+        line, emittedLength,
+        formatted >= static_cast<int>(sizeof(body)) ||
+            lineLength >= static_cast<int>(sizeof(line)));
+#endif
 }
 
 void Log::log(LogLevel level, const char *tag, const char *format, ...)

@@ -85,6 +85,10 @@ zephyr_library_sources_ifdef(CONFIG_RTOS_HEAP_STATS
     ../backends/zephyr/rtos_memory.cpp
 )
 
+zephyr_library_sources_ifdef(CONFIG_RTOS_DIAGNOSTICS
+    ../backends/zephyr/rtos_diagnostics.cpp
+)
+
 zephyr_library_sources_ifdef(CONFIG_RTOS_APP_INFO
     ../backends/zephyr/rtos_app_info.cpp
 )

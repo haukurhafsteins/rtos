@@ -41,7 +41,14 @@ struct k_msgq
     void *state;
 };
 
+struct k_sem { unsigned count; unsigned limit; };
+
 extern "C" {
+int k_sem_init(k_sem *, unsigned, unsigned);
+int k_sem_take(k_sem *, k_timeout_t);
+void k_sem_give(k_sem *);
+void k_sem_reset(k_sem *);
+std::int64_t k_uptime_get();
 k_tid_t k_thread_create(
     k_thread *thread,
     k_thread_stack_t *stack,
@@ -54,6 +61,10 @@ k_tid_t k_thread_create(
     std::uint32_t options,
     k_timeout_t delay);
 int k_thread_name_set(k_tid_t thread, const char *name);
+const char *k_thread_name_get(k_tid_t thread);
+int k_thread_stack_space_get(k_tid_t thread, std::size_t *free);
+void k_sched_lock();
+void k_sched_unlock();
 int k_thread_join(k_tid_t thread, k_timeout_t timeout);
 void k_thread_abort(k_tid_t thread);
 k_tid_t k_current_get();

@@ -8,6 +8,7 @@
 #include "rtos/AppInfo.hpp"
 #include "rtos/memory.hpp"
 #include "rtos/psram.hpp"
+#include "rtos/ZephyrDiagnostics.hpp"
 #include "zephyr_memory_appinfo_test.hpp"
 
 namespace
@@ -173,4 +174,25 @@ TEST(ZephyrAppInfoTest, MacAddressZeroesOutputWhenHwinfoFails)
     EXPECT_FALSE(rtos::AppInfo::macAddress(address));
     for (const auto byte : address)
         EXPECT_EQ(byte, 0u);
+}
+
+TEST_F(ZephyrMemoryTest, DiagnosticsCountPipelineFailuresOnceAndExcludeZeroSize)
+{
+    using namespace rtos::zephyr_diagnostics;
+    const auto index = static_cast<unsigned>(Failure::Pipeline);
+    const auto before = failures().counts[index];
+    EXPECT_EQ(rtos::memory::psram_malloc(300), nullptr);
+    EXPECT_EQ(failures().counts[index], before); // begin() is explicit, after main
+    begin();
+    EXPECT_EQ(rtos::memory::psram_calloc(2, 150), nullptr);
+    EXPECT_EQ(failures().counts[index], before + 1);
+    EXPECT_EQ(rtos::memory::psram_calloc(std::numeric_limits<std::size_t>::max(), 2), nullptr);
+    EXPECT_EQ(failures().counts[index], before + 2);
+    auto *block = rtos::memory::psram_malloc(16);
+    ASSERT_NE(block, nullptr);
+    EXPECT_EQ(rtos::memory::psram_realloc(block, 300), nullptr);
+    EXPECT_EQ(failures().counts[index], before + 3);
+    EXPECT_EQ(rtos::memory::psram_realloc(block, 0), nullptr);
+    EXPECT_EQ(rtos::memory::psram_malloc(0), nullptr);
+    EXPECT_EQ(failures().counts[index], before + 3);
 }
