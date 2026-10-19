@@ -599,13 +599,24 @@ public:
         }
     }
 
-    static void getTopicList(std::vector<TopicId> &outList)
+    /// @brief Start a walk over all registered topics, in handle order.
+    /// @return The first topic, or INVALID_TOPIC_ID if none are registered.
+    /// @note The cursor is the handle itself, not an iterator, so the lock is held for one
+    /// lookup only and a topic registered mid-walk cannot invalidate it.
+    static TopicId getFirstTopic()
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        for (const auto &[handle, topic] : topics_)
-        {
-            outList.push_back(handle);
-        }
+        return topics_.empty() ? TopicBase::INVALID_TOPIC_ID : topics_.begin()->first;
+    }
+
+    /// @brief Continue a walk started with getFirstTopic().
+    /// @param prev The topic returned by the previous call.
+    /// @return The next topic after prev, or INVALID_TOPIC_ID at the end.
+    static TopicId getNextTopic(const TopicId prev)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = topics_.upper_bound(prev);
+        return it != topics_.end() ? it->first : TopicBase::INVALID_TOPIC_ID;
     }
 
     static Result getTopicInfo(const TopicId topic, TopicInfo &info)
