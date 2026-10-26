@@ -30,6 +30,52 @@ constexpr TypeId getTypeId()
 }
 
 //-----------------------------------------------------------------------------
+/// @brief Outcome of a TopicBase::toJson conversion.
+///
+/// Has no conversion to bool, and that is the point. toJson used to return a bare
+/// int and -1 for "this topic has no toJson callback", so `if (topic->toJson(...))`
+/// compiled and `if (-1)` is true: the one failure the caller was testing for was
+/// reported as success, and a half-written or empty buffer reached the wire as
+/// `{"name":"vib/psd","value":}` with no error logged anywhere (HMO-143, HMO-140).
+/// Read it with ok(), the reason with error(), and the byte count with written().
+class JsonResult
+{
+public:
+    enum class Error : uint8_t
+    {
+        none = 0,
+        /// @brief The topic was registered without a toJson callback. A programming
+        /// error at setup rather than a failure of this particular conversion.
+        noCallback,
+        /// @brief The callback could not render the value, e.g. it did not fit the buffer.
+        conversionFailed
+    };
+
+    static JsonResult success(int written) { return JsonResult(Error::none, written); }
+    static JsonResult noCallback() { return JsonResult(Error::noCallback, 0); }
+    static JsonResult conversionFailed() { return JsonResult(Error::conversionFailed, 0); }
+
+    /// @brief Build a result from a toJson callback's raw int return.
+    /// @note Callbacks return the number of bytes written, or a negative value on
+    /// failure. Zero bytes is a failure too: an empty render is not a JSON value.
+    static JsonResult fromCallback(int written)
+    {
+        return written > 0 ? success(written) : conversionFailed();
+    }
+
+    [[nodiscard]] bool ok() const { return _error == Error::none; }
+    [[nodiscard]] Error error() const { return _error; }
+    /// @brief Bytes written to the json buffer. Zero unless ok().
+    [[nodiscard]] int written() const { return _written; }
+
+private:
+    JsonResult(Error e, int w) : _error(e), _written(w) {}
+
+    Error _error;
+    int _written;
+};
+
+//-----------------------------------------------------------------------------
 /// @brief Abstract base for all topics
 ///
 /// The _name member must be a string literal and is immutable
@@ -42,8 +88,8 @@ public:
 
     std::string_view getName() const { return _name; }
     virtual TypeId typeId() const = 0;
-    virtual int toJson(std::span<char> json, const std::span<const std::byte> buffer, const char *format) const = 0;
-    virtual int toJson(std::span<char> json) const = 0;
+    [[nodiscard]] virtual JsonResult toJson(std::span<char> json, const std::span<const std::byte> buffer, const char *format) const = 0;
+    [[nodiscard]] virtual JsonResult toJson(std::span<char> json) const = 0;
     virtual bool requestWrite(const std::string_view &json) = 0;
     [[nodiscard]] virtual size_t notify() = 0;
 
@@ -293,18 +339,18 @@ public:
 
     TypeId typeId() const override { return getTypeId<T>(); }
 
-    int toJson(std::span<char> json, const std::span<const std::byte> buffer, const char *format) const override
+    [[nodiscard]] JsonResult toJson(std::span<char> json, const std::span<const std::byte> buffer, const char *format) const override
     {
         if (!_toJsonCb)
-            return -1;
+            return JsonResult::noCallback();
         const T *data = reinterpret_cast<const T *>(buffer.data());
-        return _toJsonCb(*data, json, format);
+        return JsonResult::fromCallback(_toJsonCb(*data, json, format));
     }
-    int toJson(std::span<char> json) const override
+    [[nodiscard]] JsonResult toJson(std::span<char> json) const override
     {
         if (!_toJsonCb)
-            return -1;
-        return _toJsonCb(msg.data, json, nullptr);
+            return JsonResult::noCallback();
+        return JsonResult::fromCallback(_toJsonCb(msg.data, json, nullptr));
     }
 
     [[nodiscard]]
@@ -427,7 +473,12 @@ public:
         SUB_NOT_FOUND,
         WRITE_NOT_SUPPORTED,
         WRITE_FAILED,
-        JSON_PARSE_FAILED
+        JSON_PARSE_FAILED,
+        /// @brief The topic has no toJson callback, so it can never render a value.
+        /// Distinct from JSON_PARSE_FAILED, which means this particular conversion
+        /// failed, the same way WRITE_NOT_SUPPORTED is distinct from WRITE_FAILED.
+        /// Appended rather than inserted: the numeric values are logged.
+        JSON_NOT_SUPPORTED
     };
     struct TopicInfo
     {
@@ -545,28 +596,38 @@ public:
         return topic->requestWrite(json) ? Result::OK : Result::WRITE_FAILED;
     }
 
-    /// @brief Get a JSON representation of the topic's payload.
-    /// @param handle Topic handle
+    /// @brief Get a JSON representation of a payload held in a caller's buffer.
+    /// @param topicId Topic handle
     /// @param buffer Buffer containing the payload data.
     /// @param json Buffer to write JSON string to.
-    /// @return Result::OK if successful, Result::TOPIC_NOT_FOUND if the topic does not exist,
+    /// @return Result::OK if successful, Result::TOPIC_NOT_FOUND if the topic does not
+    /// exist, Result::JSON_NOT_SUPPORTED if the topic has no toJson callback, or
+    /// Result::JSON_PARSE_FAILED if the callback could not render the value.
+    ///
+    /// @note The format is not passed through. getFormat() is the empty string for every
+    /// topic that never called setFormat(), and an empty format renders nothing, so it
+    /// cannot be forwarded unconditionally. Forwarding it as `empty() ? nullptr : c_str()`
+    /// would make setFormat() live for the first time and change the rendered precision of
+    /// the ParamMonitor and health-stats topics on a running meter -- a visible change that
+    /// needs bench verification, not part of this correctness fix.
     static Result toJson(const TopicId topicId, const std::span<const std::byte> buffer, std::span<char> json)
     {
         const TopicBase *topic = findTopic(topicId);
         if (!topic)
             return Result::TOPIC_NOT_FOUND;
-        if (topic->toJson(json, buffer, nullptr)) // TODO: format doesnt exist for some parameters. topic->getFormat().c_str()) > 0)
-            return Result::OK;
-        return Result::JSON_PARSE_FAILED;
+        return toResult(topic->toJson(json, buffer, nullptr));
     }
+
+    /// @brief Get a JSON representation of the topic's own current payload.
+    /// @param topicId Topic handle
+    /// @param json Buffer to write JSON string to.
+    /// @return As the overload above.
     static Result toJson(const TopicId topicId, std::span<char> json)
     {
         const TopicBase *topic = findTopic(topicId);
         if (!topic)
             return Result::TOPIC_NOT_FOUND;
-        if (topic->toJson(json))
-            return Result::OK;
-        return Result::JSON_PARSE_FAILED;
+        return toResult(topic->toJson(json));
     }
 
     static std::string_view resultToString(Result r)
@@ -593,6 +654,8 @@ public:
             return "WRITE_FAILED";
         case Result::JSON_PARSE_FAILED:
             return "JSON_PARSE_FAILED";
+        case Result::JSON_NOT_SUPPORTED:
+            return "JSON_NOT_SUPPORTED";
         default:
             printf("MsgBus::resultToString: Unknown result %d\n", static_cast<int>(r));
             return "UNKNOWN";
@@ -632,6 +695,20 @@ public:
     }
 
 private:
+    static Result toResult(const JsonResult &r)
+    {
+        switch (r.error())
+        {
+        case JsonResult::Error::none:
+            return Result::OK;
+        case JsonResult::Error::noCallback:
+            return Result::JSON_NOT_SUPPORTED;
+        case JsonResult::Error::conversionFailed:
+        default:
+            return Result::JSON_PARSE_FAILED;
+        }
+    }
+
     static TopicBase *findTopic(const TopicId handle)
     {
         std::lock_guard<std::mutex> lock(mutex_);
