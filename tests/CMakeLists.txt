@@ -88,6 +88,7 @@ add_executable(rtos_host_tests
     final_log_output_test.cpp
     log_test.cpp
     memory_stats_test.cpp
+    msg_bus_to_json_test.cpp
     nvs_test.cpp
     ring_buffer_test.cpp
     system_test.cpp
